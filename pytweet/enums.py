@@ -1,5 +1,5 @@
 """
-MIT License
+The MIT License (MIT)
 
 Copyright (c) 2021 TheFarGG & TheGenocides
 
@@ -22,17 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import datetime
-from typing import Union, Any, Dict, TypedDict
+from enum import Enum
 
-class Tweet(TypedDict, total=False):
-    data : Dict[str, Any]
-    id : Union[str, int]
-    text: str
-    author: object
-    sensitive: bool
-    created_at: datetime.datetime
-    source: str
-    reply_setting: str
-    lang: str
-    convertion_id: Union[str, int]
+class RelationsTypeEnum(Enum):
+    PENDING = 0
+    ACCEPT = 1
+    NUL = None
+
+class MessageTypeEnum(Enum):
+    DIRECT_MESSAGE = 0
+    MESSAGE_TWEET = 1

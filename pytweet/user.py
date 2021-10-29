@@ -1,5 +1,5 @@
 """
-MIT License
+The MIT License (MIT)
 
 Copyright (c) 2021 TheFarGG & TheGenocides
 
@@ -23,50 +23,113 @@ SOFTWARE.
 """
 
 import datetime
-from typing import Optional, List, TYPE_CHECKING
-from .abc import Messageable
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from .metrics import UserPublicMetrics
 from .utils import time_parse_todt
-from .types.user import User as UserPayload
 
 if TYPE_CHECKING:
     from .http import HTTPClient
-    
+
+from typing import Optional, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .http import HTTPClient
+
+class Messageable:
+    """Represent an object that can send and receive a message through DM.
+    Version Added: 1.0.0
+
+    Parameters:
+    -----------
+    data: Dict[str, Any]
+        The complete data of a Messageable object.
+
+    Attributes:
+    -----------
+    http_client: Optional[HTTPClient]
+        The HTTPClient that make the request.
+    """
+
+    def __init__(self, data: Dict[str, Any], **kwargs: Any):
+        self._payload = data
+        self.http_client: Optional[HTTPClient] = kwargs.get("http_client") or None
+
+    def send(self, text: str = None, **kwargs: Any) -> None:
+        """Send a message to a specific Messageable object.
+        Version Added: 1.1.0
+        """
+        self.http_client.send_message(self._payload.get("id"), text, **kwargs)
+
+    def delete_message(self, message_id: int, **kwargs: Any) -> None:
+        """Delete a message from a Messageable object.
+        Version Added: 1.1.0
+        """
+        self.http_client.delete_message(self._payload.get("id"), message_id, **kwargs)
+
+    def follow(self) -> None:
+        """Follow a Messageable object.
+        Version Added: 1.1.0
+        """
+        self.http_client.follow_user(self._payload.get("id"))
+
+    def unfollow(self) -> None:
+        """Unfollow a Messageable object.
+        Version Added: 1.1.0
+        """
+        self.http_client.unfollow_user(self._payload.get("id"))
+
+    def block(self) -> None:
+        """Block a Messageable object.
+        Version Added: 1.2.0
+        """
+        self.http_client.block_user(self._payload.get("id"))
+
+    def unblock(self) -> None:
+        """Unblock a Messageable object.
+        Version Added: 1.2.0
+        """
+        self.http_client.unblock_user(self._payload.get("id"))
+
 class User(Messageable):
     """Represent a user in Twitter.
     User is an identity in twitter, its very interactive. Can send message, post a tweet, and even send messages to other user through Dms.
 
     Parameters:
-    ===================
-    data: UserPayload
-        The complete data of the user through a dictionary in a UserPayload format form!
+    -----------
+    data: Dict[str, Any]
+        The complete data of the user through a dictionary in a dictionary.
 
     Attributes:
-    ===================
+    -----------
     original_payload
-        Represent the main data of a tweet.
+        Represent the main data of a user.
 
     http_client
         Represent a :class: HTTPClient that make the request.
-    
+
     user_metrics
-	    Represent the public metrics of the user.
+        Represent the public metrics of the user.
     """
 
-    def __init__(self, data: UserPayload, **kwargs):
+    def __init__(self, data: Dict[str, Any], **kwargs):
         super().__init__(data, **kwargs)
         self.original_payload = data
-        self._payload = self.original_payload.get('data') if self.original_payload.get('data') != None else self.original_payload
+        self._payload = (
+            self.original_payload.get("data") if self.original_payload.get("data") != None else self.original_payload
+        )
         self.http_client: Optional[HTTPClient] = kwargs.get("http_client") or None
-        self.user_metrics = UserPublicMetrics(self._payload) if self._payload != None else self.original_payload
+        self._metrics = UserPublicMetrics(self._payload) if self._payload != None else self.original_payload
 
     def __str__(self) -> str:
         return self.username
 
     def __repr__(self) -> str:
-        return "User(name={0.name} username={0.username} id={0.id})".format(
-            self
-        )
+        return "User(name={0.name} username={0.username} id={0.id})".format(self)
+
+    def __eq__(self, other):
+        if not isinstance(other, self):
+            raise ValueError("== operation cannot be done with one of the element not a valid User object")
+        return self.id == other.id
 
     @property
     def name(self) -> str:
@@ -80,8 +143,8 @@ class User(Messageable):
 
     @property
     def id(self) -> int:
-        """id: Return the user's id."""
-        return int(self._payload.get("id"))
+        """int: Return the user's id."""
+        return self._payload.get("id")
 
     @property
     def bio(self) -> str:
@@ -130,10 +193,10 @@ class User(Messageable):
 
     @property
     def pinned_tweet(self) -> Optional[object]:
-        """Optional[:class:Tweet]: Returns the user's pinned tweet.
+        """Optional[object]: Returns the user's pinned tweet.
         Version Added: 1.1.3"""
-        
-        id=self._payload.get("pinned_tweet_id")
+
+        id = self._payload.get("pinned_tweet_id")
         return None if not id else self.http_client.fetch_tweet(int(id), http_client=self.http_client)
 
     @property
@@ -149,17 +212,17 @@ class User(Messageable):
     @property
     def followers_count(self) -> int:
         """int: Return total of followers that a user has."""
-        return int(self.user_metrics.followers_count)
+        return int(self._metrics.followers_count)
 
     @property
     def following_count(self) -> int:
         """int: Return total of following that a user has."""
-        return int(self.user_metrics.following_count)
+        return int(self._metrics.following_count)
 
     @property
     def tweet_count(self) -> int:
         """int: Return total of tweet that a user has."""
-        return int(self.user_metrics.tweet_count)
+        return int(self._metrics.tweet_count)
 
     @property
     def listed_count(self) -> int:
