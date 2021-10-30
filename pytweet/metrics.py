@@ -22,29 +22,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 class UserPublicMetrics:
     """Represent a PublicMetrics for a User.
     This PublicMetrics contain public info about the user.
     Version Added:: 1.1.0
-
     Parameters:
     -----------
     data: Dict[str, Any]
         The complete data of the user's public metrics through a dictionary!
-
     Attributes:
     -----------
     original_payload
         Return the original payload of the user.
-
     _public
         Returns the user public metrics.
     """
 
-    def __init__(self, data=Dict[str, Any], **kwargs):
+    def __init__(self, data: Dict[str, Any] = {}, **kwargs: Any):
         self.original_payload = data
         self._public = self.original_payload.get("public_metrics")
 
@@ -84,22 +81,19 @@ class TweetPublicMetrics:
     """Represent a PublicMetrics for a tweet.
     This PublicMetrics contain public info about the tweet.
     Version Added:: 1.1.0
-
     Parameters:
     -----------
     data: Dict[str, Any]:
         The complete data of the tweet's public metrics keep in a dictionary.
-
     Attributes:
     -----------
     original_payload
         Return the original payload of the tweet.
-
     _public
         Returns the user public metrics.
     """
 
-    def __init__(self, data=Dict[str, Any], **kwargs):
+    def __init__(self, data: Dict[str, Any] = {}, **kwargs: Any) -> None:
         self.original_payload = data
         self._public = data.get("public_metrics")
 

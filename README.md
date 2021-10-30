@@ -1,4 +1,6 @@
-# PyTweet
+<h2 align="center">Pytweet</h2>
+<p align="center">PyTweet is a Synchronous python API wrapper for twitter's api, Its filled with rich features and is very easy to use.</p>
+
 
 <img src="https://img.shields.io/pypi/v/PyTweet?logo=pypi&style=plastic">  
 
@@ -7,10 +9,7 @@
 <img alt="PyPI - License" src="https://img.shields.io/pypi/l/PyTweet"> 
 
 <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/PyTweet">
-<br />
-<br />
 
-PyTweet is a Synchronous python API wrapper for twitter's api, Its filled with rich features and is very easy to use.
 
 ## Installation
 
@@ -29,16 +28,22 @@ python3 -m pip install PyTweet
 ```py
 import pytweet
 
-client=pytweet.Client("Your Bearer Token Here!!!", consumer_key="Your consumer_key here", consumer_key_secret="Your consumer_key_secret here", access_token="Your access_token here", access_token_secret="Your access_token_secret here") #if you dont have one make an application in https://apps.pytweet.com
+client = pytweet.Client(
+    "Your Bearer Token Here!!!", 
+    consumer_key="Your consumer_key here", 
+    consumer_key_secret="Your consumer_key_secret here", 
+    access_token="Your access_token here", 
+    access_token_secret="Your access_token_secret here",
+) #if you dont have one make an application in https://apps.twitter.com
 ```
 
 #### After that we use functions to get info from twitter api.
 ```py
-user=client.get_user_by_username("TheGenocides")
+user = client.get_user_by_username("TheGenocides")
 print(user.name, user.username, user.id)
-#Return The user's name, username, and id
+# Return The user's name, username, and id
 
-tweet=client.get_tweet(Tweet ID Here)
+tweet = client.get_tweet(Tweet ID Here)
 print(tweet.text, tweet.id, tweet.author.username)
 # Return the tweet's text, id, and the author's username.
 ```

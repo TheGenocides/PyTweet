@@ -23,8 +23,9 @@ SOFTWARE.
 """
 
 import datetime
+from typing import Any, Dict, List, NoReturn, Optional, Union
+
 from .utils import time_parse_todt
-from typing import Dict, List, Any, Optional
 
 
 class Media:
@@ -49,35 +50,35 @@ class Media:
         return "Media(type={0.type} url={0.url} width={0.width} height={0.height} media_key={0.media_key})".format(self)
 
     @property
-    def type(self) -> Optional[Any]:
+    def type(self) -> Optional[str]:
         """str: Return the media's type.
         Version Added: 1.1.0
         """
         return self._payload.get("type")
 
     @property
-    def url(self) -> Optional[Any]:
+    def url(self) -> Optional[str]:
         """str: Return the media's url.
         Version Added: 1.1.0
         """
         return self._payload.get("url")
 
     @property
-    def width(self) -> Optional[Any]:
+    def width(self) -> Optional[int]:
         """int: Return the media's width.
         Version Added: 1.1.0
         """
         return self._payload.get("width")
 
     @property
-    def height(self) -> Optional[Any]:
+    def height(self) -> Optional[int]:
         """int: Return the media's height.
         Version Added: 1.1.0
         """
         return self._payload.get("height")
 
     @property
-    def media_key(self) -> Optional[Any]:
+    def media_key(self) -> Optional[Union[int, str]]:
         """Return the media's unique key.
         Version Added: 1.1.0
         """
@@ -101,47 +102,47 @@ class PollOptions:
         return "PollOption({0.position} {0.label} {0.votes})".format(self)
 
     @property
-    def position(self) -> Optional[Any]:
+    def position(self) -> Optional[int]:
         """int: The option's position.
         Version Added: 1.1.0
         """
         return self.options.get("position")
 
     @property
-    def label(self) -> Optional[Any]:
+    def label(self) -> Optional[str]:
         """str: The option's label.
         Version Added: 1.1.0
         """
         return self.options.get("label")
 
     @property
-    def votes(self) -> Optional[Any]:
+    def votes(self) -> Optional[int]:
         """int: The option's votes.
         Version Added: 1.1.0
         """
         return self.options.get("votes")
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> Union[bool, NoReturn]:
         if not isinstance(other, PollOptions):
             raise ValueError("== operation cannot be done with one of the element not a valid PollOptions")
         return self.position == other.position
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> Union[bool, NoReturn]:
         if not isinstance(other, PollOptions):
             raise ValueError("< operation cannot be done with one of the element not a valid PollOptions")
         return self.position < other.position
 
-    def __gt__(self, other):
+    def __gt__(self, other: object) -> Union[bool, NoReturn]:
         if not isinstance(other, PollOptions):
             raise ValueError("> operation cannot be done with one of the element not a valid PollOptions")
         return self.position > other.position
 
-    def __le__(self, other):
+    def __le__(self, other: object) -> Union[bool, NoReturn]:
         if not isinstance(other, PollOptions):
             raise ValueError("<= operation cannot be done with one of the element not a valid PollOptions")
         return self.position <= other.position
 
-    def __ge__(self, other):
+    def __ge__(self, other: object) -> Union[bool, NoReturn]:
         if not isinstance(other, PollOptions):
             raise ValueError(">= operation cannot be done with one of the element not a valid PollOptions")
         return self.position >= other.position
@@ -174,18 +175,18 @@ class Poll:
         return len(self.options)
 
     @property
-    def id(self) -> Optional[Any]:
+    def id(self) -> Optional[int]:
         """int: Return the poll's unique ID.
         Version Added: 1.1.0.
         """
-        return self._payload.get("id") 
+        return self._payload.get("id")
 
     @property
     def options(self) -> List[PollOptions]:
         """List[PollOptions]: Return a list of :class: PollOptions.
         Version Added: 1.1.0.
         """
-        return [PollOptions(option) for option in self._payload.get("options")] # type: ignore
+        return [PollOptions(option) for option in self._payload.get("options")]
 
     @property
     def voting_status(self) -> bool:
@@ -199,7 +200,7 @@ class Poll:
         """int: Return the poll duration in seconds.
         Version Added: 1.1.0
         """
-        return int(self._payload.get("duration_minutes")) * 60 # type: ignore
+        return int(self._payload.get("duration_minutes")) * 60  # type: ignore
 
     @property
     def end_date(self) -> datetime.datetime:
