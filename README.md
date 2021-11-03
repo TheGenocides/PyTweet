@@ -1,7 +1,5 @@
 <h2 align="center">Pytweet</h2>
-<p align="center">PyTweet is a Synchronous python API wrapper for twitter's api, Its filled with rich features and is very easy to use.</p>
-
-
+<div>
 <img src="https://img.shields.io/pypi/v/PyTweet?logo=pypi&style=plastic">  
 
 <img src="https://img.shields.io/badge/code%20style-black-000000.svg">  
@@ -10,6 +8,16 @@
 
 <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/PyTweet">
 
+<img src="https://img.shields.io/github/commit-activity/m/TheFarGG/PyTweet?color=turquoise&logo=github&logoColor=black">
+
+<img src="https://img.shields.io/github/issues-pr/TheFarGG/PyTweet?color=yellow&label=Pull%20Requests&logo=github&logoColor=black">
+
+<img src="https://img.shields.io/discord/858312394236624957?color=blue&label=PyTweet&logo=discord">
+
+</div>
+<br>
+<br>
+<p align="center">PyTweet is a Synchronous python API wrapper for twitter's api, Its filled with rich features and is very easy to use.</p>
 
 ## Installation
 
@@ -48,8 +56,44 @@ print(tweet.text, tweet.id, tweet.author.username)
 # Return the tweet's text, id, and the author's username.
 ```
 
+You can check in `examples` directory for more example code.
+
+# Links
+
+- [Documentation](https://py-tweet.readthedocs.io/en/latest/)
+
+- [Support Server](https://discord.gg/XHBhg6A4jJ)
+
+- [github](https://github.com/TheFarGG/PyTweet) 
+
+- [Pypi](https://pypi.org/project/PyTweet) 
+
 # Contribute
 You can Contribute or open an issue regarding this wrapper in [github](https://github.com/TheFarGG/PyTweet)! 
 
-# Licence
-[MIT](https://opensource.org/licenses/MIT)
+# Licence & Copyright
+All files of this repo are protected by the [MIT](https://opensource.org/licenses/MIT) license given below.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2021 TheFarGG & TheGenocides
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

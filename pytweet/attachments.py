@@ -1,36 +1,26 @@
-"""
-The MIT License (MIT)
-
-Copyright (c) 2021 TheFarGG & TheGenocides
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
 import datetime
-from typing import Any, Dict, List, NoReturn, Optional, Union
-
+from typing import Any, Dict, List, NoReturn, Optional, Union, TypeVar
 from .utils import time_parse_todt
+
+M = TypeVar("M", bound="Media")
+PO = TypeVar("PO", bound="PollOptions")
+P = TypeVar("P", bound="Poll")
 
 
 class Media:
     """Represent a Media attachment in a tweet.
     Version Added: 1.1.0
+
+    .. describe:: x == y
+        Check if one Media key is equal to another.
+
+
+    .. describe:: x != y
+        Check if one Media key is not equal to another.
+
+
+    .. describe:: str(x)
+        Get the media url.
 
     Parameters:
     -----------
@@ -47,7 +37,26 @@ class Media:
         self._payload = data
 
     def __repr__(self) -> str:
-        return "Media(type={0.type} url={0.url} width={0.width} height={0.height} media_key={0.media_key})".format(self)
+        return "Media(type={0.type} url={0.url} width={0.width} height={0.height} media_key={0.media_key})".format(
+            self
+        )
+
+    def __str__(self) -> str:
+        return self.url
+
+    def __eq__(self, other: M) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "== operation cannot be done with one of the element not a valid Media object"
+            )
+        return self.media_key == other.media_key
+
+    def __ne__(self, other: M) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "!= operation cannot be done with one of the element not a valid Media object"
+            )
+        return self.media_key != other.media_key
 
     @property
     def type(self) -> Optional[str]:
@@ -89,6 +98,29 @@ class PollOptions:
     """Represent the Poll Options, The minimum option of a poll is 2 and maximum is 4.
     Version Added: 1.1.0
 
+    .. describe:: x == y
+        Check if one PollOption position is equal to another.
+
+
+    .. describe:: x != y
+        Check if one PollOption position is not equal to another.
+
+
+    .. describe:: x > y
+        Check if one PollOption position is higher then to another.
+
+
+    .. describe:: x < y
+        Check if one PollOption position is less then to another.
+
+
+    .. describe:: x >= y
+        Check if one PollOption position is higher then equal to another.
+
+
+    .. describe:: x <= y
+        Check if one PollOption position is less then equal to another.
+
     Parameters:
     -----------
     options: Dict[str, Any]
@@ -100,6 +132,48 @@ class PollOptions:
 
     def __repr__(self) -> str:
         return "PollOption({0.position} {0.label} {0.votes})".format(self)
+
+    def __eq__(self, other: PO) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "== operation cannot be done with one of the element not a valid PollOptions object"
+            )
+        return self.position == other.position
+
+    def __ne__(self, other: PO) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "!= operation cannot be done with one of the element not a valid PollOptions object"
+            )
+        return self.position != other.position
+
+    def __lt__(self, other: PO) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "< operation cannot be done with one of the element not a valid PollOptions object"
+            )
+        return self.position < other.position
+
+    def __gt__(self, other: PO) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "> operation cannot be done with one of the element not a valid PollOptions object"
+            )
+        return self.position > other.position
+
+    def __le__(self, other: PO) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "<= operation cannot be done with one of the element not a valid PollOptions object"
+            )
+        return self.position <= other.position
+
+    def __ge__(self, other: PO) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                ">= operation cannot be done with one of the element not a valid PollOptions object"
+            )
+        return self.position >= other.position
 
     @property
     def position(self) -> Optional[int]:
@@ -122,35 +196,25 @@ class PollOptions:
         """
         return self.options.get("votes")
 
-    def __eq__(self, other: object) -> Union[bool, NoReturn]:
-        if not isinstance(other, PollOptions):
-            raise ValueError("== operation cannot be done with one of the element not a valid PollOptions")
-        return self.position == other.position
-
-    def __lt__(self, other: object) -> Union[bool, NoReturn]:
-        if not isinstance(other, PollOptions):
-            raise ValueError("< operation cannot be done with one of the element not a valid PollOptions")
-        return self.position < other.position
-
-    def __gt__(self, other: object) -> Union[bool, NoReturn]:
-        if not isinstance(other, PollOptions):
-            raise ValueError("> operation cannot be done with one of the element not a valid PollOptions")
-        return self.position > other.position
-
-    def __le__(self, other: object) -> Union[bool, NoReturn]:
-        if not isinstance(other, PollOptions):
-            raise ValueError("<= operation cannot be done with one of the element not a valid PollOptions")
-        return self.position <= other.position
-
-    def __ge__(self, other: object) -> Union[bool, NoReturn]:
-        if not isinstance(other, PollOptions):
-            raise ValueError(">= operation cannot be done with one of the element not a valid PollOptions")
-        return self.position >= other.position
-
 
 class Poll:
     """Represent a Poll attachment in a tweet.
     Version Added: 1.1.0
+
+    .. describe:: x == y
+        Check if one Poll's id is equal to another.
+
+
+    .. describe:: x != y
+        Check if one Poll's id is not equal to another.
+
+
+    .. describe:: len(x)
+        return how many options in the poll.
+
+
+    .. describe:: bool(x)
+        return True if the poll is open else it return False.
 
     Parameters:
     -----------
@@ -171,8 +235,25 @@ class Poll:
             self
         )
 
+    def __eq__(self, other: P) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "== operation cannot be done with one of the element not a valid Poll object"
+            )
+        return self.id == other.id
+
+    def __ne__(self, other: P) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "!= operation cannot be done with one of the element not a valid Poll object"
+            )
+        return self.id != other.id
+
     def __len__(self) -> int:
         return len(self.options)
+
+    def __bool__(self) -> bool:
+        return self.voting_status
 
     @property
     def id(self) -> Optional[int]:
@@ -200,7 +281,7 @@ class Poll:
         """int: Return the poll duration in seconds.
         Version Added: 1.1.0
         """
-        return int(self._payload.get("duration_minutes")) * 60  # type: ignore
+        return int(self._payload.get("duration_minutes")) * 60
 
     @property
     def end_date(self) -> datetime.datetime:

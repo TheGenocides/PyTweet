@@ -1,33 +1,15 @@
-"""
-The MIT License (MIT)
-
-Copyright (c) 2021 TheFarGG & TheGenocides
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
 from typing import Any, Dict, NoReturn, Optional, Union
 
 import requests
 
 from .auth import OauthSession
-from .errors import Forbidden, NotFoundError, PytweetException,TooManyRequests, Unauthorized
+from .errors import (
+    Forbidden,
+    NotFoundError,
+    PytweetException,
+    TooManyRequests,
+    Unauthorized,
+)
 from .relations import RelationFollow
 from .tweet import Tweet
 from .user import User
@@ -35,7 +17,19 @@ from .user import User
 
 def check_error(respond: requests.models.Response) -> NoReturn:
     code = respond.status_code
-    if code == 401:
+    if code == 200:
+        res= respond.json()
+        if "errors" in res.keys():
+            try:
+                if res["errors"][0]["detail"].startswith("Could not find"):
+                    raise NotFoundError(res["errors"][0]["detail"])
+
+                else:
+                    raise PytweetException(res["errors"][0]["detail"])
+            except KeyError:
+                raise PytweetException(res)
+
+    elif code == 401:
         raise Unauthorized("Invalid credentials passed!")
 
     elif code == 403:
@@ -78,6 +72,8 @@ class HTTPClient:
     access_token_secret: Optional[str]
         The Access Token Secret of the app.
 
+    Attributes:
+    -----------
     credentials
         The credentials in a dictionary.
 
@@ -185,46 +181,18 @@ class HTTPClient:
 
         respond = res(route.url, headers=headers, params=params, json=json, auth=auth)
         check_error(respond)
-        res: Dict[str, Any] = respond.json()
+        res = respond.json()
 
-        if "errors" in res.keys():
-            try:
-                if res["errors"][0]["detail"].startswith("Could not find"):
-                    raise NotFoundError(res["errors"][0]["detail"])
-
-                else:
-                    raise PytweetException(res["errors"][0]["detail"])
-            except KeyError:
-                raise PytweetException(res)
-
-        elif "meta" in res.keys():
+        if "meta" in res.keys():
             if res["meta"]["result_count"] == 0:
                 return 0
-
-        if route.method.upper() == "POST":
-            if mode.lower() == "follow":
-                self.followed_cache[str(json["target_user_id"])] = res
-
-            elif mode.lower() == "block":
-                self.blocked_cache[str(json["target_user_id"])] = res
-
-        elif route.method.upper() == "DELETE":
-            if mode.lower() == "unfollow":
-                try:
-                    self.followed_cache.pop(route.url.split("/")[3])
-                except KeyError:
-                    pass
-
-            elif mode.lower() == "unblock":
-                try:
-                    self.blocked_cache.pop(route.url.split("/")[3])
-                except KeyError:
-                    pass
 
         if is_json:
             return res
 
         return respond
+
+    
 
     def fetch_user(self, user_id: Union[str, int], http_client=None) -> User:
         """Make a Request to optain the user from the given user id.
@@ -279,11 +247,19 @@ class HTTPClient:
         )
 
         data["data"].update(
-            {"followers": [User(follower, http_client=self) for follower in followers["data"]] if followers != 0 else 0}
+            {
+                "followers": [
+                    User(follower, http_client=self) for follower in followers["data"]
+                ]
+                if followers != 0
+                else 0
+            }
         )
         data["data"].update(
             {
-                "following": [User(following, http_client=self) for following in following["data"]]
+                "following": [
+                    User(following, http_client=self) for following in following["data"]
+                ]
                 if following != 0
                 else 0
             }
@@ -388,12 +364,24 @@ class HTTPClient:
         res["includes"]["users"][0].update({"following": user.following})
 
         try:
-            
+
             res2["data"]
             res3["data"]
 
-            res["data"].update({"retweeted_by": [User(user, http_client=http_client) for user in res2["data"]]})
-            res["data"].update({"liking_users": [User(user, http_client=http_client) for user in res3["data"]]})
+            res["data"].update(
+                {
+                    "retweeted_by": [
+                        User(user, http_client=http_client) for user in res2["data"]
+                    ]
+                }
+            )
+            res["data"].update(
+                {
+                    "liking_users": [
+                        User(user, http_client=http_client) for user in res3["data"]
+                    ]
+                }
+            )
 
         except (KeyError, TypeError):
             res["data"].update({"retweeted_by": 0})
@@ -402,12 +390,16 @@ class HTTPClient:
         return Tweet(res, http_client=http_client)
 
     def send_message(self, user_id: Union[str, int], text: str, **kwargs):
-        """WARNING: this function isnt finish yet!
+        """Make a post Request for sending a message to a Messageable object.
         version Added: 1.1.0
+        Updated: 1.2.0
 
-        Make a post Request for sending a message to a Messageable object.
+        user_id: Union[str, int]
+            The user id that you wish to send message to.
+
+        text: str
+            The text that will be send to that user.
         """
-        raise NotImplementedError("This function is not finished yet")
 
         data = {
             "event": {
@@ -420,12 +412,12 @@ class HTTPClient:
                 },
             }
         }
-        self.request(
-            Route("POST", "1.1", "/direct_messages/events/new"),
-            headers={"content-type": "application/json"},
+        res=self.request(
+            Route("POST", "1.1", "/direct_messages/events/new.json"),
             json=data,
             auth=True,
         )
+        return res
 
     def delete_message(self, id: int, **kwargs):
         """WARNING: this function isnt finish yet!
@@ -452,12 +444,13 @@ class HTTPClient:
             The user's id that you wish to follow, better to make it a string.
         """
         my_id = self.access_token.partition("-")[0]
-        self.request(
+        res=self.request(
             Route("POST", "2", f"/users/{my_id}/following"),
             json={"target_user_id": str(user_id)},
             auth=True,
             mode="follow",
         )
+        return RelationFollow(res)
 
     def unfollow_user(self, user_id: Union[str, int]) -> None:
         """Make a DELETE Request to unfollow a Messageable object.
@@ -468,26 +461,28 @@ class HTTPClient:
             The user's id that you wish to unfollow, better to make it a string.
         """
         my_id = self.access_token.partition("-")[0]
-        self.request(
+        res=self.request(
             Route("DELETE", "2", f"/users/{my_id}/following/{user_id}"),
             auth=True,
             mode="unfollow",
         )
+        return RelationFollow(res)
 
     def block_user(self, user_id: Union[str, int]) -> None:
         """Make a POST Request to Block a Messageable object.
-        version Added:1.2.0
+        version Added: 1.2.0
 
         user_id: Union[str, int]
             The user's id that you wish to block, better to make it a string.
         """
         my_id = self.access_token.partition("-")[0]
-        self.request(
+        res=self.request(
             Route("POST", "2", f"/users/{my_id}/blocking"),
             json={"target_user_id": str(user_id)},
             auth=True,
             mode="block",
         )
+        return res
 
     def unblock_user(self, user_id: Union[str, int]) -> None:
         """Make a DELETE Request to unblock a Messageable object.
@@ -497,8 +492,9 @@ class HTTPClient:
             The user's id that you wish to unblock, better to make it a string.
         """
         my_id = self.access_token.partition("-")[0]
-        self.request(
+        res=self.request(
             Route("DELETE", "2", f"/users/{my_id}/blocking/{user_id}"),
             auth=True,
             mode="unblock",
         )
+        return res

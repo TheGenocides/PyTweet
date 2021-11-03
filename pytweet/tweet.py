@@ -1,35 +1,13 @@
-"""
-The MIT License (MIT)
-
-Copyright (c) 2021 TheFarGG & TheGenocides
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-"""
-
 import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, NoReturn, TypeVar
 
 from .attachments import Media, Poll
 from .enums import MessageTypeEnum
 from .metrics import TweetPublicMetrics
 from .user import User
 from .utils import time_parse_todt
+
+T = TypeVar("T", bound="Tweet")
 
 
 class EmbedsImages:
@@ -51,7 +29,9 @@ class EmbedsImages:
         self._payload = data
 
     def __repr__(self) -> str:
-        return "EmbedsImages(url={0.url} width={0.width} height={0.height})".format(self)
+        return "EmbedsImages(url={0.url} width={0.width} height={0.height})".format(
+            self
+        )
 
     def __str__(self) -> str:
         return self.url
@@ -97,7 +77,9 @@ class Embed:
         self._payload = data
 
     def __repr__(self) -> str:
-        return "Embed(title={0.title} description={0.description} url={0.url})".format(self)
+        return "Embed(title={0.title} description={0.description} url={0.url})".format(
+            self
+        )
 
     def __str__(self) -> str:
         return self.url
@@ -160,11 +142,12 @@ class Embed:
 
     @property
     def images(self) -> Optional[List[EmbedsImages]]:
-        """List[:class:EmbedsImages]: Return a list of Embed's Images
+        """List[EmbedsImages]: Return a list of Embed's Images
         .. versionadded: 1.1.3
         """
         if self._payload.get("images"):
             return [EmbedsImages(data) for data in self._payload.get("images")]
+
         return None
 
     @property
@@ -177,6 +160,17 @@ class Tweet:
     """Represent a tweet message from Twitter.
     A Tweet is any message posted to Twitter which may contain photos, videos, links, and text.
     .. versionadded: 1.0.0
+
+    .. describe:: x == y
+        Check if one tweet id is equal to another.
+
+
+    .. describe:: x != y
+        Check if one tweet id is not equal to another.
+
+
+    .. describe:: str(x)
+        Get the Tweet's text.
 
     Parameters:
     -----------
@@ -208,6 +202,23 @@ class Tweet:
     def __repr__(self) -> str:
         return "Tweet(text={0.text} id={0.id} author={0.author})".format(self)
 
+    def __str__(self) -> str:
+        return self.text
+
+    def __eq__(self, other: T) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "== operation cannot be done with one of the element not a valid Tweet object"
+            )
+        return self.id == other.id
+
+    def __ne__(self, other: T) -> Union[bool, NoReturn]:
+        if not isinstance(other, self):
+            raise ValueError(
+                "!= operation cannot be done with one of the element not a valid User object"
+            )
+        return self.id != other.id
+
     @property
     def text(self) -> str:
         """str: Return the tweet's text."""
@@ -216,21 +227,21 @@ class Tweet:
     @property
     def id(self) -> int:
         """int: Return the tweet's id."""
-        return self._payload.get("id")
+        return int(self._payload.get("id"))
 
     @property
-    def author(self) -> Optional[User]:
-        """Optional[:class:User]: Return a user (object) who posted the tweet."""
+    def author(self) -> User:
+        """Optional[User]: Return a user (object) who posted the tweet."""
         return User(self._includes.get("users")[0], http_client=self.http_client)
 
     @property
     def retweeted_by(self) -> Union[List[User], int]:
-        """Optional[List[:class:User]]: Return a list of users thats retweeted the specified tweet's id. Maximum users is 100. Return 0 if no one retweeted."""
+        """Optional[List[User]]: Return a list of users thats retweeted the specified tweet's id. Maximum users is 100. Return 0 if no one retweeted."""
         return self._payload.get("retweeted_by")
 
     @property
     def liking_users(self) -> Union[List[User], int]:
-        """Optional[List[:class:User]]: Return a list of users that liked the specified tweet's id. Maximum users is 100. Return 0 if no one liked."""
+        """Optional[List[User]]: Return a list of users that liked the specified tweet's id. Maximum users is 100. Return 0 if no one liked."""
         return self._payload.get("liking_users")
 
     @property
@@ -261,7 +272,7 @@ class Tweet:
     @property
     def convertion_id(self) -> int:
         """int: Return the tweet's convertion id."""
-        return self._payload.get("convertion_id")
+        return int(self._payload.get("convertion_id"))
 
     @property
     def link(self) -> str:
@@ -291,7 +302,9 @@ class Tweet:
         if self._includes:
             if self._includes.get("mentions"):
                 return [
-                    self.http_client.fetch_user_byusername(user.get("username"), http_client=self.http_client)
+                    self.http_client.fetch_user_byusername(
+                        user.get("username"), http_client=self.http_client
+                    )
                     for user in self._includes.get("mentions")
                 ]
         return None
@@ -329,7 +342,9 @@ class Tweet:
 
     @property
     def type(self) -> MessageTypeEnum:
-        """MessageTypeEnum: Return the Message type."""
+        """MessageTypeEnum: Return the Message type.
+        .. versionadded: 1.2.0
+        """
         return MessageTypeEnum(1)
 
     @property
