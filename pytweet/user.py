@@ -1,17 +1,9 @@
 import datetime
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    List,
-    NoReturn,
-    Optional,
-    Union,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Optional, TypeVar, Union
 
 from .metrics import UserPublicMetrics
 from .utils import time_parse_todt
+from .relations import RelationFollow
 
 if TYPE_CHECKING:
     from .http import HTTPClient
@@ -39,11 +31,18 @@ class Messageable:
         self._payload = data
         self.http_client: Optional[HTTPClient] = kwargs.get("http_client") or None
 
-    def send(self, text: str = None, **kwargs: Any) -> None:
-        """Send a message to a specific Messageable object.
+    def send(self, text: str = None, **kwargs: Any):
+        """:class:`DirectMessage`: Send a message to a specific Messageable object.
         Version Added: 1.1.0
+        
+        Parameters:
+        -----------
+        text: str
+            The text that will be send to that user.
+
+        This function return a :class:`DirectMessage` object
         """
-        res=self.http_client.send_message(self._payload.get("id"), text, **kwargs)
+        res = self.http_client.send_message(self._payload.get("id"), text, **kwargs)
         return res
 
     def delete_message(self, message_id: int, **kwargs: Any) -> None:
@@ -52,33 +51,35 @@ class Messageable:
         """
         self.http_client.delete_message(self._payload.get("id"), message_id, **kwargs)
 
-    def follow(self) -> None:
-        """Follow a Messageable object.
+    def follow(self) -> RelationFollow:
+        """:class:`RelationFollow`: Follow a Messageable object.
         Version Added: 1.1.0
+
+        This function return a :class:`RelationFollow` object.
         """
-        follow=self.http_client.follow_user(self._payload.get("id"))
+        follow = self.http_client.follow_user(self._payload.get("id"))
         return follow
 
-    def unfollow(self) -> None:
-        """Unfollow a Messageable object.
+    def unfollow(self) -> RelationFollow:
+        """:class:`RelationFollow`: Unfollow a Messageable object.
         Version Added: 1.1.0
+
+        This function return a :class:`RelationFollow` object.
         """
-        unfollow=self.http_client.unfollow_user(self._payload.get("id"))
+        unfollow = self.http_client.unfollow_user(self._payload.get("id"))
         return unfollow
 
     def block(self) -> None:
         """Block a Messageable object.
         Version Added: 1.2.0
         """
-        block=self.http_client.block_user(self._payload.get("id"))
-        return block
+        self.http_client.block_user(self._payload.get("id"))
 
     def unblock(self) -> None:
         """Unblock a Messageable object.
         Version Added: 1.2.0
         """
-        unblock=self.http_client.unblock_user(self._payload.get("id"))
-        return unblock
+        self.http_client.unblock_user(self._payload.get("id"))
 
 
 class User(Messageable):
@@ -104,31 +105,21 @@ class User(Messageable):
 
     Attributes:
     -----------
-    original_payload
-        Represent the main data of a user.
-
     http_client
-        Represent a :class: HTTPClient that make the request.
+        Represent the HTTP Client that make the request, this will be use for interaction between the client and the user.
 
     user_metrics
         Represent the public metrics of the user.
-
     """
 
     def __init__(self, data: Dict[str, Any], **kwargs: Any) -> None:
         super().__init__(data, **kwargs)
         self.original_payload = data
         self._payload = (
-            self.original_payload.get("data")
-            if self.original_payload.get("data") != None
-            else self.original_payload
+            self.original_payload.get("data") if self.original_payload.get("data") != None else self.original_payload
         )
         self.http_client: Optional[HTTPClient] = kwargs.get("http_client") or None
-        self._metrics = (
-            UserPublicMetrics(self._payload)
-            if self._payload != None
-            else self.original_payload
-        )
+        self._metrics = UserPublicMetrics(self._payload) if self._payload != None else self.original_payload
 
     def __str__(self) -> str:
         return self.username
@@ -138,16 +129,12 @@ class User(Messageable):
 
     def __eq__(self, other: U) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "== operation cannot be done with one of the element not a valid User object"
-            )
+            raise ValueError("== operation cannot be done with one of the element not a valid User object")
         return self.id == other.id
 
     def __ne__(self, other: U) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "!= operation cannot be done with one of the element not a valid User object"
-            )
+            raise ValueError("!= operation cannot be done with one of the element not a valid User object")
         return self.id != other.id
 
     @property
@@ -163,7 +150,7 @@ class User(Messageable):
     @property
     def id(self) -> int:
         """int: Return the user's id."""
-        return self._payload.get("id")
+        return int(self._payload.get("id"))
 
     @property
     def bio(self) -> str:
@@ -213,41 +200,37 @@ class User(Messageable):
     @property
     def pinned_tweet(self) -> Optional[object]:
         """Optional[object]: Returns the user's pinned tweet.
-        Version Added: 1.1.3"""
-
+        Version Added: 1.1.3
+        """
         id = self._payload.get("pinned_tweet_id")
-        return (
-            None
-            if not id
-            else self.http_client.fetch_tweet(int(id), http_client=self.http_client)
-        )
+        return None if not id else self.http_client.fetch_tweet(int(id), http_client=self.http_client)
 
     @property
-    def followers(self) -> List[object]:
-        """List[:class:User]: Returns a list of users who are followers of the specified user ID."""
+    def followers(self) -> Union[List[U], List]:
+        """:class:`List[User]`: Returns a list of users who are followers of the specified user ID. Maximum users is 100 users."""
         return self._payload.get("followers")
 
     @property
-    def following(self) -> List[object]:
-        """List[:class:object]: Returns a list of users thats followed by the specified user ID."""
+    def following(self) -> Union[List[U], List]:
+        """:class:`List[User]`: Returns a list of users thats followed by the specified user ID. Maximum users is 100 users."""
         return self._payload.get("following")
 
     @property
-    def followers_count(self) -> int:
+    def follower_count(self) -> int:
         """int: Return total of followers that a user has."""
-        return int(self._metrics.followers_count)
+        return self._metrics.follower_count
 
     @property
     def following_count(self) -> int:
         """int: Return total of following that a user has."""
-        return int(self._metrics.following_count)
+        return self._metrics.following_count
 
     @property
     def tweet_count(self) -> int:
         """int: Return total of tweet that a user has."""
-        return int(self._metrics.tweet_count)
+        return self._metrics.tweet_count
 
     @property
     def listed_count(self) -> int:
         """int: Return total of listed that a user has."""
-        return int(self._metrics.listed_count)
+        return self._metrics.listed_count

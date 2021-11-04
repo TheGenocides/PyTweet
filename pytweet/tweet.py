@@ -1,5 +1,5 @@
 import datetime
-from typing import Any, Dict, List, Optional, Union, NoReturn, TypeVar
+from typing import Any, Dict, List, NoReturn, Optional, TypeVar, Union
 
 from .attachments import Media, Poll
 from .enums import MessageTypeEnum
@@ -7,7 +7,13 @@ from .metrics import TweetPublicMetrics
 from .user import User
 from .utils import time_parse_todt
 
-T = TypeVar("T", bound="Tweet")
+TT = TypeVar("TT", bound="Tweet")
+
+__all__ = (
+    "EmbedsImages",
+    "Embed",
+    "Tweet",
+)
 
 
 class EmbedsImages:
@@ -29,9 +35,7 @@ class EmbedsImages:
         self._payload = data
 
     def __repr__(self) -> str:
-        return "EmbedsImages(url={0.url} width={0.width} height={0.height})".format(
-            self
-        )
+        return "EmbedsImages(url={0.url} width={0.width} height={0.height})".format(self)
 
     def __str__(self) -> str:
         return self.url
@@ -77,9 +81,7 @@ class Embed:
         self._payload = data
 
     def __repr__(self) -> str:
-        return "Embed(title={0.title} description={0.description} url={0.url})".format(
-            self
-        )
+        return "Embed(title={0.title} description={0.description} url={0.url})".format(self)
 
     def __str__(self) -> str:
         return self.url
@@ -205,18 +207,14 @@ class Tweet:
     def __str__(self) -> str:
         return self.text
 
-    def __eq__(self, other: T) -> Union[bool, NoReturn]:
+    def __eq__(self, other: TT) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "== operation cannot be done with one of the element not a valid Tweet object"
-            )
+            raise ValueError("== operation cannot be done with one of the element not a valid Tweet object")
         return self.id == other.id
 
-    def __ne__(self, other: T) -> Union[bool, NoReturn]:
+    def __ne__(self, other: TT) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "!= operation cannot be done with one of the element not a valid User object"
-            )
+            raise ValueError("!= operation cannot be done with one of the element not a valid User object")
         return self.id != other.id
 
     @property
@@ -231,17 +229,17 @@ class Tweet:
 
     @property
     def author(self) -> User:
-        """Optional[User]: Return a user (object) who posted the tweet."""
+        """Optional[:class:`User`]: Return a user (object) who posted the tweet."""
         return User(self._includes.get("users")[0], http_client=self.http_client)
 
     @property
     def retweeted_by(self) -> Union[List[User], int]:
-        """Optional[List[User]]: Return a list of users thats retweeted the specified tweet's id. Maximum users is 100. Return 0 if no one retweeted."""
+        """Optional[List[:class:`User`]]: Return a list of users thats retweeted the specified tweet's id. Maximum users is 100. Return 0 if no one retweeted."""
         return self._payload.get("retweeted_by")
 
     @property
     def liking_users(self) -> Union[List[User], int]:
-        """Optional[List[User]]: Return a list of users that liked the specified tweet's id. Maximum users is 100. Return 0 if no one liked."""
+        """Optional[List[:class:`User`]]: Return a list of users that liked the specified tweet's id. Maximum users is 100. Return 0 if no one liked."""
         return self._payload.get("liking_users")
 
     @property
@@ -251,7 +249,7 @@ class Tweet:
 
     @property
     def created_at(self) -> datetime.datetime:
-        """:class: datetime.datetime: Return a datetime object with the tweet posted age."""
+        """:class:`datetime.datetime`: Return a datetime object with the tweet posted age."""
         return time_parse_todt(self._payload.get("created_at"))
 
     @property
@@ -281,7 +279,7 @@ class Tweet:
 
     @property
     def reply_to(self) -> Optional[User]:
-        """Optional[:class:User]: Return the user that you reply with the tweet, a tweet count as reply tweet if the tweet startswith @Username or mention a user.
+        """:class:`Optional[User]`: Return the user that you reply with the tweet, a tweet count as reply tweet if the tweet startswith @Username or mention a user.
         .. versionadded: 1.1.3
         """
         user = (
@@ -296,22 +294,20 @@ class Tweet:
 
     @property
     def mentions(self) -> Optional[List[User]]:
-        """Optional[List[:class:User]]: Return the mentioned users, if there isnt it return None.
+        """:class:`Optional[List[User]]`: Return the mentioned users, if there isnt it return None.
         .. versionadded: 1.1.3
         """
         if self._includes:
             if self._includes.get("mentions"):
                 return [
-                    self.http_client.fetch_user_byusername(
-                        user.get("username"), http_client=self.http_client
-                    )
+                    self.http_client.fetch_user_byusername(user.get("username"), http_client=self.http_client)
                     for user in self._includes.get("mentions")
                 ]
         return None
 
     @property
     def poll(self) -> Optional[Poll]:
-        """:class:Poll: Return a Poll object with the tweet's poll.
+        """:class:`Poll`: Return a Poll object with the tweet's poll.
         .. versionadded: 1.1.0
         """
         if self._includes:
@@ -322,7 +318,7 @@ class Tweet:
 
     @property
     def media(self) -> Optional[Media]:
-        """List[:class:Media] -> Return a list of media(s) in a tweet.
+        """:class:`List[Media]` -> Return a list of media(s) in a tweet.
         .. versionadded: 1.1.0
         """
         if self._includes:
@@ -332,7 +328,7 @@ class Tweet:
 
     @property
     def embeds(self) -> Optional[List[Embed]]:
-        """List[:class:Embed]: Return a list of Embeded url from that tweet
+        """:class:`List[Embed]`: Return a list of Embeded url from that tweet
         .. versionadded: 1.1.3
         """
         if self._payload.get("entities"):

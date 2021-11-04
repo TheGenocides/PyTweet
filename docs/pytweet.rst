@@ -1,24 +1,8 @@
 pytweet package
 ===============
 
-Subpackages
------------
-
-.. toctree::
-   :maxdepth: 4
-
-   pytweet.types
-
 Submodules
 ----------
-
-pytweet.abc module
-------------------
-
-.. automodule:: pytweet.abc
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 pytweet.attachments module
 --------------------------

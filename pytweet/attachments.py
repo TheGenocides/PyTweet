@@ -1,10 +1,17 @@
 import datetime
-from typing import Any, Dict, List, NoReturn, Optional, Union, TypeVar
+from typing import Any, Dict, List, NoReturn, Optional, TypeVar, Union
+
 from .utils import time_parse_todt
 
 M = TypeVar("M", bound="Media")
 PO = TypeVar("PO", bound="PollOptions")
 P = TypeVar("P", bound="Poll")
+
+__all__ = (
+    "Media",
+    "PollOptions",
+    "Poll",
+)
 
 
 class Media:
@@ -37,44 +44,38 @@ class Media:
         self._payload = data
 
     def __repr__(self) -> str:
-        return "Media(type={0.type} url={0.url} width={0.width} height={0.height} media_key={0.media_key})".format(
-            self
-        )
+        return "Media(type={0.type} url={0.url} width={0.width} height={0.height} media_key={0.media_key})".format(self)
 
     def __str__(self) -> str:
         return self.url
 
     def __eq__(self, other: M) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "== operation cannot be done with one of the element not a valid Media object"
-            )
+            raise ValueError("== operation cannot be done with one of the element not a valid Media object")
         return self.media_key == other.media_key
 
     def __ne__(self, other: M) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "!= operation cannot be done with one of the element not a valid Media object"
-            )
+            raise ValueError("!= operation cannot be done with one of the element not a valid Media object")
         return self.media_key != other.media_key
 
     @property
     def type(self) -> Optional[str]:
-        """str: Return the media's type.
+        """:class:`Optional[str]`: Return the media's type.
         Version Added: 1.1.0
         """
         return self._payload.get("type")
 
     @property
     def url(self) -> Optional[str]:
-        """str: Return the media's url.
+        """:class:`Optional[str]`: Return the media's url.
         Version Added: 1.1.0
         """
         return self._payload.get("url")
 
     @property
     def width(self) -> Optional[int]:
-        """int: Return the media's width.
+        """:class:`Optional[int]`: the media's width.
         Version Added: 1.1.0
         """
         return self._payload.get("width")
@@ -88,7 +89,7 @@ class Media:
 
     @property
     def media_key(self) -> Optional[Union[int, str]]:
-        """Return the media's unique key.
+        """:class:`Optional[Union[int, str]]`: Returns the media's unique key.
         Version Added: 1.1.0
         """
         return self._payload.get("media_key")
@@ -135,63 +136,51 @@ class PollOptions:
 
     def __eq__(self, other: PO) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "== operation cannot be done with one of the element not a valid PollOptions object"
-            )
+            raise ValueError("== operation cannot be done with one of the element not a valid PollOptions object")
         return self.position == other.position
 
     def __ne__(self, other: PO) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "!= operation cannot be done with one of the element not a valid PollOptions object"
-            )
+            raise ValueError("!= operation cannot be done with one of the element not a valid PollOptions object")
         return self.position != other.position
 
     def __lt__(self, other: PO) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "< operation cannot be done with one of the element not a valid PollOptions object"
-            )
+            raise ValueError("< operation cannot be done with one of the element not a valid PollOptions object")
         return self.position < other.position
 
     def __gt__(self, other: PO) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "> operation cannot be done with one of the element not a valid PollOptions object"
-            )
+            raise ValueError("> operation cannot be done with one of the element not a valid PollOptions object")
         return self.position > other.position
 
     def __le__(self, other: PO) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "<= operation cannot be done with one of the element not a valid PollOptions object"
-            )
+            raise ValueError("<= operation cannot be done with one of the element not a valid PollOptions object")
         return self.position <= other.position
 
     def __ge__(self, other: PO) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                ">= operation cannot be done with one of the element not a valid PollOptions object"
-            )
+            raise ValueError(">= operation cannot be done with one of the element not a valid PollOptions object")
         return self.position >= other.position
 
     @property
     def position(self) -> Optional[int]:
-        """int: The option's position.
+        """:class:`Optional[int]`: The option's position.
         Version Added: 1.1.0
         """
         return self.options.get("position")
 
     @property
     def label(self) -> Optional[str]:
-        """str: The option's label.
+        """:class:`Optional[int]`: The option's label.
         Version Added: 1.1.0
         """
         return self.options.get("label")
 
     @property
     def votes(self) -> Optional[int]:
-        """int: The option's votes.
+        """:class:`Optional[int]`: The option's votes.
         Version Added: 1.1.0
         """
         return self.options.get("votes")
@@ -237,16 +226,12 @@ class Poll:
 
     def __eq__(self, other: P) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "== operation cannot be done with one of the element not a valid Poll object"
-            )
+            raise ValueError("== operation cannot be done with one of the element not a valid Poll object")
         return self.id == other.id
 
     def __ne__(self, other: P) -> Union[bool, NoReturn]:
         if not isinstance(other, self):
-            raise ValueError(
-                "!= operation cannot be done with one of the element not a valid Poll object"
-            )
+            raise ValueError("!= operation cannot be done with one of the element not a valid Poll object")
         return self.id != other.id
 
     def __len__(self) -> int:
@@ -264,7 +249,7 @@ class Poll:
 
     @property
     def options(self) -> List[PollOptions]:
-        """List[PollOptions]: Return a list of :class: PollOptions.
+        """:class:`List[PollOptions]`: Return a list of :class:`PollOptions`.
         Version Added: 1.1.0.
         """
         return [PollOptions(option) for option in self._payload.get("options")]
@@ -285,7 +270,7 @@ class Poll:
 
     @property
     def end_date(self) -> datetime.datetime:
-        """datetime.datetime: Return the end date in datetime.datetime object.
+        """`datetime.datetime`: Return the end date in datetime.datetime object.
         Version Added: 1.1.0
         """
         return time_parse_todt(self._payload.get("end_datetime"))

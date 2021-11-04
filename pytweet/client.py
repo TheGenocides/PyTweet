@@ -1,8 +1,10 @@
 from typing import Any, Optional, Union
 
-from .http import HTTPClient, Route
+from .http import HTTPClient
 from .tweet import Tweet
 from .user import User
+
+__all__ = ("Client",)
 
 
 class Client:
@@ -30,7 +32,7 @@ class Client:
     Attributes:
     -----------
     http: Optional[HTTPClient]
-        Return a :class: HTTPClient, HTTPClient is responsible for making most of the Requests.
+        Return a :class:`HTTPClient`, HTTPClient is responsible for making most of the Requests.
     """
 
     def __init__(
@@ -42,7 +44,7 @@ class Client:
         access_token: Optional[str] = None,
         access_token_secret: Optional[str] = None,
     ) -> None:
-        self.http = HTTPClient(
+        self.http: HTTPClient = HTTPClient(
             bearer_token,
             consumer_key=consumer_key,
             consumer_key_secret=consumer_key_secret,
@@ -55,7 +57,7 @@ class Client:
 
     @property
     def user(self) -> Optional[User]:
-        """:class:User: Returns the client in user object, return None if access token isn't specified.
+        """:class:`User`: Returns the client in user object, return None if access token isn't specified.
         Version Added: 1.2.0
         """
         if not self.http.access_token:
@@ -69,25 +71,40 @@ class Client:
         """A function for HTTPClient.fetch_user().
         Version Added: 1.0.0
 
-        This function returns a :class: User object.
+        Parameters:
+        -----------
+        user_id: Union[str, int]
+            Represent the user id that you wish to get info to, If you dont have it you may use `fetch_user_byusername` because it only required the user's username.
+
+        This function returns a :class:`User` object.
         """
-        return self.http.fetch_user(user_id, self.http)
+        return self.http.fetch_user(user_id, http_client=self.http)
 
     def get_user_by_username(self, username: str) -> User:
         """A function for HTTPClient.fetch_user_byusername().
         Version Added: 1.0.0
 
-        This function returns a :class:User object.
+        Parameters:
+        -----------
+        username: Union[str, int]
+            Represent the user's username that you wish to get info. A Username usually start with '@' before any letters. If a username named @Jack,then the username argument must be 'Jack'.
+
+        This function returns a :class:`User` object.
         """
-        return self.http.fetch_user_byusername(username, self.http)
+        return self.http.fetch_user_byusername(username, http_client=self.http)
 
     def get_tweet(self, tweet_id: Union[str, int]) -> Tweet:
         """A function for HTTPClient.fetch_tweet().
         Version Added: 1.0.0
 
-        This function returns a :class:Tweet.
+        Parameters:
+        -----------
+        tweet_id: Union[str, int]
+            Represent the tweet id that you wish to get info to.
+
+        This function returns a :class:`Tweet`.
         """
-        return self.http.fetch_tweet(tweet_id, self.http)
+        return self.http.fetch_tweet(tweet_id, http_client=self.http)
 
     def tweet(self, text: str, **kwargs: Any) -> None:
         """Post a tweet directly to twitter from the given paramaters.
