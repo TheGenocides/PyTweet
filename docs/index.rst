@@ -19,6 +19,18 @@ Getting started
 - **Quickstart** :doc:`quickstart`
 - **First steps:** :doc:`pytweet`
 
+
+Manuals
+-----------------
+- :doc:`api`
+
+
+Links
+-----------------
+- :gh:`Github`
+- :issue:`Report a bug`
+- :discord:`Discord Server`
+
 Indices and tables
 ==================
 

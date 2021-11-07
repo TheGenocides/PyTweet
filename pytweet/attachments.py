@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import datetime
 from typing import Any, Dict, List, NoReturn, Optional, TypeVar, Union
-
 from .utils import time_parse_todt
 
 M = TypeVar("M", bound="Media")
@@ -16,7 +17,6 @@ __all__ = (
 
 class Media:
     """Represent a Media attachment in a tweet.
-    Version Added: 1.1.0
 
     .. describe:: x == y
         Check if one Media key is equal to another.
@@ -29,15 +29,7 @@ class Media:
     .. describe:: str(x)
         Get the media url.
 
-    Parameters:
-    -----------
-    data: Dict[str, Any]
-        The full data of the media in a dictionary.
-
-    Attributes:
-    -----------
-    _payload
-        Represent the main data of a Media.
+    .. versionadded:: 1.1.0
     """
 
     def __init__(self, data: Dict[str, Any]):
@@ -61,43 +53,47 @@ class Media:
 
     @property
     def type(self) -> Optional[str]:
-        """:class:`Optional[str]`: Return the media's type.
-        Version Added: 1.1.0
+        """Optional[:class:`str`]: Return the media's type.
+
+        .. versionadded:: 1.1.0
         """
         return self._payload.get("type")
 
     @property
     def url(self) -> Optional[str]:
-        """:class:`Optional[str]`: Return the media's url.
-        Version Added: 1.1.0
+        """Optional[:class:`str`]: Return the media's url.
+
+        .. versionadded:: 1.1.0
         """
         return self._payload.get("url")
 
     @property
     def width(self) -> Optional[int]:
-        """:class:`Optional[int]`: the media's width.
-        Version Added: 1.1.0
+        """Optional[:class:`int`]: the media's width.
+
+        .. versionadded:: 1.1.0
         """
         return self._payload.get("width")
 
     @property
     def height(self) -> Optional[int]:
-        """int: Return the media's height.
-        Version Added: 1.1.0
+        """Optional[:class:`int`]: Return the media's height.
+
+        .. versionadded:: 1.1.0
         """
         return self._payload.get("height")
 
     @property
     def media_key(self) -> Optional[Union[int, str]]:
-        """:class:`Optional[Union[int, str]]`: Returns the media's unique key.
-        Version Added: 1.1.0
+        """Optional[Union[:class:`int`, :class:`str`]]: Returns the media's unique key.
+
+        .. versionadded:: 1.1.0
         """
         return self._payload.get("media_key")
 
 
 class PollOptions:
-    """Represent the Poll Options, The minimum option of a poll is 2 and maximum is 4.
-    Version Added: 1.1.0
+    """Represent the Poll Options, The minimum options in a poll is 2 and maximum is 4.
 
     .. describe:: x == y
         Check if one PollOption position is equal to another.
@@ -122,10 +118,7 @@ class PollOptions:
     .. describe:: x <= y
         Check if one PollOption position is less then equal to another.
 
-    Parameters:
-    -----------
-    options: Dict[str, Any]
-        An dictionary filled with the option's: position, label, and votes.
+    .. versionadded:: 1.1.0
     """
 
     def __init__(self, options: Dict[str, Any]):
@@ -166,29 +159,31 @@ class PollOptions:
 
     @property
     def position(self) -> Optional[int]:
-        """:class:`Optional[int]`: The option's position.
-        Version Added: 1.1.0
+        """Optional[:class:`int`]: The option's position.
+
+        .. versionadded:: 1.1.0
         """
         return self.options.get("position")
 
     @property
     def label(self) -> Optional[str]:
-        """:class:`Optional[int]`: The option's label.
-        Version Added: 1.1.0
+        """Optional[:class:`str`]: The option's label.
+
+        .. versionadded:: 1.1.0
         """
         return self.options.get("label")
 
     @property
     def votes(self) -> Optional[int]:
-        """:class:`Optional[int]`: The option's votes.
-        Version Added: 1.1.0
+        """Optional[:class:`int`]: The option's votes.
+
+        .. versionadded:: 1.1.0
         """
-        return self.options.get("votes")
+        return self.options.get("votes", 0)
 
 
 class Poll:
     """Represent a Poll attachment in a tweet.
-    Version Added: 1.1.0
 
     .. describe:: x == y
         Check if one Poll's id is equal to another.
@@ -205,15 +200,7 @@ class Poll:
     .. describe:: bool(x)
         return True if the poll is open else it return False.
 
-    Parameters:
-    -----------
-    data: Dict[str, Any]
-        The full data of the poll in a dictionary.
-
-    Attributes:
-    -----------
-    _payload
-        The complete data of a Poll keep inside a dictionary.
+    .. versionadded:: 1.1.0
     """
 
     def __init__(self, data: Dict[str, Any]):
@@ -242,35 +229,88 @@ class Poll:
 
     @property
     def id(self) -> Optional[int]:
-        """int: Return the poll's unique ID.
-        Version Added: 1.1.0.
+        """:class:`int`: Return the poll's unique ID.
+
+        .. versionadded:: 1.1.0
         """
-        return self._payload.get("id")
+        return int(self._payload.get("id"))
 
     @property
     def options(self) -> List[PollOptions]:
-        """:class:`List[PollOptions]`: Return a list of :class:`PollOptions`.
-        Version Added: 1.1.0.
+        """List[:class:`PollOptions`]: Return a list of :class:`PollOptions`.
+
+        .. versionadded:: 1.1.0
         """
         return [PollOptions(option) for option in self._payload.get("options")]
 
     @property
     def voting_status(self) -> bool:
-        """bool: Return True if the poll is still open for voting, if its closed it return False.
-        Version Added: 1.1.0
+        """:class:`bool`: Return True if the poll is still open for voting, if its closed it return False.
+
+        .. versionadded:: 1.1.0
         """
         return True if self._payload.get("voting_status") == "open" else False
 
     @property
     def duration(self) -> int:
-        """int: Return the poll duration in seconds.
-        Version Added: 1.1.0
+        """:class:`int`: Return the poll duration in seconds.
+
+        .. versionadded:: 1.1.0
         """
         return int(self._payload.get("duration_minutes")) * 60
 
     @property
     def end_date(self) -> datetime.datetime:
-        """`datetime.datetime`: Return the end date in datetime.datetime object.
-        Version Added: 1.1.0
+        """:class:`datetime.datetime`: Return the end date in datetime.datetime object.
+
+        .. versionadded:: 1.1.0
         """
         return time_parse_todt(self._payload.get("end_datetime"))
+
+
+class QuickReply:
+    """Represent a quick_reply attachment in Direct Message.
+
+    Parameters
+    ------------
+    type: :class:`str`
+        The quick_reply's types, it must be and only 'options'
+
+    Attributes
+    ------------
+    options: List[Any, Any]
+        The QuickReply's options. An option must have a label, description and metadata, Maximum options is 20.
+    items: :class:`int`
+        Return how many options in your quick_reply object.
+
+    .. versionadded:: 1.2.0
+    """
+
+    def __init__(self, type: str = "options"):
+        self.type = type if type == "options" else "options"
+        self.options: List[Any, Any] = []
+        self.items: int = len(self.options)
+
+    def add_option(self, *, label: str, description: str = None, metadata: str = None) -> QuickReply:
+        """:class:`QuickReply`: Method for adding an option in your quick reply instance.
+
+        Parameters
+        ------------
+        label: str
+            The option's label. Label text is returned as the user's message response, Must be less then 36 characters.
+        description: str
+            The option's description. Description text displayed under label text. All options must have this property defined if property is present in any option. Text is auto-wrapped and will display on a max of two lines and supports n for controlling line breaks, Must be less then 72 characters.
+        metadata: str
+            The option's metadata. Metadata that will be sent back in the webhook request, must be less then 1000 characters.
+
+        Returns
+        ---------
+        :class:`QuickReply`
+            Returns the :class:`QuickReply` object.
+
+        .. versionadded:: 1.2.0
+        """
+
+        self.options.append({"label": label, "description": description, "metadata": metadata})
+
+        return self
