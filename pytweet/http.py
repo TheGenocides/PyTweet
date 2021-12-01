@@ -5,15 +5,35 @@ import logging
 import sys
 import time
 import requests
-from typing import Any, Dict, NoReturn, Optional, Union
+import pytweet
+from typing import Any, Dict, List, NoReturn, Optional, Union
 
+from .attachments import CTA, Geo, Poll, QuickReply, File, CustomProfile
 from .auth import OauthSession
-from .errors import Forbidden, NotFoundError, PytweetException, TooManyRequests, Unauthorized, BadRequests, NotFound
-from .message import DirectMessage
-from .relations import RelationFollow
+from .enums import ReplySetting, SpaceState
+from .errors import (
+    BadRequests,
+    Forbidden,
+    NotFound,
+    NotFoundError,
+    PytweetException,
+    TooManyRequests,
+    Unauthorized,
+)
+from .message import DirectMessage, Message
+from .space import Space
 from .tweet import Tweet
 from .user import User
-from .attachments import QuickReply
+from .stream import Stream
+from .expansions import (
+    TWEET_EXPANSION,
+    USER_FIELD,
+    TWEET_FIELD,
+    SPACE_FIELD,
+    MEDIA_FIELD,
+    PLACE_FIELD,
+    POLL_FIELD,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -21,25 +41,37 @@ _log = logging.getLogger(__name__)
 def check_error(response: requests.models.Response) -> NoReturn:
     code = response.status_code
     if code == 200:
-        res = response.json()
-        if "errors" in res.keys():
-            try:
-                if res["errors"][0]["detail"].startswith("Could not find"):
-                    raise NotFoundError(response)
+        try:
+            res = response.json()
+            if "errors" in res.keys():
+                if res.get("errors"):
+                    if "detail" in res.get("errors")[0].keys():
+                        detail = res["errors"][0]["detail"]
+                        if detail.startswith("Could not find"):
+                            raise NotFoundError(response)
+                    elif "details" in res.get("errors")[0].keys():
+                        detail = res["errors"][0]["details"][0]
+                        if detail.startswith("Cannot parse rule"):
+                            _log.warning(
+                                f"Invalid stream rule! Rules Info: 'created': {res['meta']['summary'].get('created')}, 'not_created': {res['meta']['summary'].get('not_created')}, 'valid': {res['meta']['summary'].get('valid')}, 'invalid': {res['meta']['summary'].get('invalid')}"
+                            )
+                            raise SyntaxError(detail)
 
                 else:
                     raise PytweetException(response, res["errors"][0]["detail"])
-            except KeyError:
+        except (j.decoder.JSONDecodeError, KeyError) as e:
+            if isinstance(e, KeyError):
                 raise PytweetException(res)
+            return
 
-    elif code in (201, 204):
+    elif code in (201, 202, 204):
         pass
 
     elif code == 400:
         raise BadRequests(response)
 
     elif code == 401:
-        raise Unauthorized(response, "Invalid credentials passed!")
+        raise Unauthorized(response)
 
     elif code == 403:
         raise Forbidden(response)
@@ -56,7 +88,7 @@ def check_error(response: requests.models.Response) -> NoReturn:
 
     else:
         raise PytweetException(
-            f"Unknown exception raised (status code: {response.status_code}): Open an issue in github or go to the support server to report this error unknown exception!"
+            f"Unknown exception raised (status code: {response.status_code}): Open an issue in github or go to the support server to report this unknown exception!"
         )
 
 
@@ -64,39 +96,6 @@ RequestModel: Union[Dict[str, Any], Any] = Any
 
 
 class HTTPClient:
-    """Represents the http/base client for :class:`Client`
-    This http/base client have methods for making requests to twitter's api!
-
-    Parameters:
-    -----------
-    bearer_token: str
-        The Bearer Token of the app. The most important one, because this make most of the requests for twitter's api version 2.
-
-    consumer_key: Optional[str]
-        The Consumer Key of the app.
-
-    consumer_key_secret: Optional[str]
-        The Consumer Key Secret of the app.
-
-    access_token: Optional[str]
-        The Access Token of the app.
-
-    access_token_secret: Optional[str]
-        The Access Token Secret of the app.
-
-    Attributes:
-    -----------
-    credentials
-        The credentials in a dictionary.
-
-    Raises
-    --------
-    pytweet.errors.Unauthorized:
-        Raise when the api return code: 401. This usually because you passed invalid credentials.
-
-    .. versionadded:: 1.0.0
-    """
-
     def __init__(
         self,
         bearer_token: str,
@@ -105,6 +104,7 @@ class HTTPClient:
         consumer_key_secret: Optional[str],
         access_token: Optional[str],
         access_token_secret: Optional[str],
+        stream: Optional[Stream] = None,
     ) -> Union[None, NoReturn]:
         self.credentials: Dict[str, Optional[str]] = {
             "bearer_token": bearer_token,
@@ -124,16 +124,36 @@ class HTTPClient:
 
         for k, v in self.credentials.items():
             if not isinstance(v, str) and not isinstance(v, type(None)):
-                raise Unauthorized(None, f"Wrong authorization passed for credential: {k}.") from Exception
+                raise Unauthorized(None, f"Wrong authorization passed for credential: {k}.")
 
         self.bearer_token: Optional[str] = bearer_token
         self.consumer_key: Optional[str] = consumer_key
         self.consumer_key_secret: Optional[str] = consumer_key_secret
         self.access_token: Optional[str] = access_token
         self.access_token_secret: Optional[str] = access_token_secret
+        self.stream = stream
         self.base_url = "https://api.twitter.com/"
+        self.upload_url = "https://upload.twitter.com/1.1/media/upload.json"
         self.message_cache = {}
         self.tweet_cache = {}
+        self.events = {}
+        if self.stream:
+            self.stream.http_client = self
+            self.stream.connection.http_client = self
+
+    def build_object(self, obj: str) -> Any:
+        real_obj = getattr(pytweet, obj)
+        if real_obj:
+            return real_obj
+        return None
+
+    def dispatch(self, event_name, *args):
+        try:
+            event = self.events[event_name]
+        except KeyError:
+            return
+        else:
+            event(*args)
 
     def request(
         self,
@@ -147,38 +167,10 @@ class HTTPClient:
         auth: bool = False,
         is_json: bool = True,
     ) -> Union[str, Dict[Any, Any], NoReturn]:
-        """This function make an HTTP Request with the given parameters then return a dictionary in a json format.
-
-        Parameters
-        ------------
-        route: Route
-            Represent the Route class, this will be use to configure the endpoint's path, method, and version of the api.
-        headers: RequestModel
-            Represent the http request headers, it usually filled with your bearer token. If this isn't specified then the default argument will be an empty dictionary. Later in the code it will update and gets your bearer token.
-        params: RequestModel
-            Represent the http request parameters, If this isn't specified then the default argument will be an empty dictionary.
-        json: RequestModel
-            Represent the Json data. This usually use for request with POST method.
-        auth: bool
-           Represent a toggle, if auth is True then the request will be handle with Oauth1 particularly OauthSession.
-        is_json: bool
-            Represent a toggle, if its True then the return will be in a json format else its going to be a requests.models.Response object. Default to True.
-
-        Raises
-        --------
-        pytweet.errors.Unauthorized:
-            Raise when the api return code: 401. This usually because you passed invalid credentials
-        pytweet.errors.Forbidden:
-            Raise when the api return code: 403. There's a lot of reason why, This usually happen when the client cannot do the request due to twitter's limitation e.g trying to follow someone that you blocked etc.
-        pytweet.errors.TooManyRequests:
-            Raise when the api return code: 429. This happen when you made too much request thus the api ratelimit you. The ratelimit will ware off in a couple of minutes.
-
-        .. versionadded:: 1.0.0
-        """
         url = self.base_url + version + path
         user_agent = "Py-Tweet (https://github.com/TheFarGG/PyTweet/) Python/{0[0]}.{0[1]}.{0[2]} requests/{1}"
-        if headers == {}:
-            headers = {"Authorization": f"Bearer {self.bearer_token}"}
+        if "Authorization" not in list(headers.keys()):
+            headers["Authorization"] = f"Bearer {self.bearer_token}"
 
         headers["User-Agent"] = user_agent.format(sys.version_info, requests.__version__)
 
@@ -187,261 +179,204 @@ class HTTPClient:
             raise TypeError("Method isn't recognizable")
 
         if auth:
+            for k, v in self.credentials.items():
+                if v is None:
+                    raise PytweetException(f"{k} is a required credentials that is missing!")
             auth = OauthSession(self.consumer_key, self.consumer_key_secret)
             auth.set_access_token(self.access_token, self.access_token_secret)
             auth = auth.oauth1
 
         response = res(url, headers=headers, params=params, json=json, auth=auth)
         check_error(response)
-        res=None
+        res = None
 
         try:
             res = response.json()
-        except j.JSONDecoderError:
-            return
+        except j.decoder.JSONDecodeError:
+            return response.text
 
         if "meta" in res.keys():
-            if res["meta"]["result_count"] == 0:
-                return []
+            try:
+                if res["meta"]["result_count"] == 0:
+                    return []
+            except KeyError:
+                pass
 
         if is_json:
             return res
         return response
 
-    def fetch_user(self, user_id: Union[str, int], *, http_client: Optional[HTTPClient] = None) -> User:
-        """Make a Request to obtain the user from the given user id.
+    def upload(self, file: File, command: str, *, media_id=None):
+        assert command.upper() in ("INIT", "APPEND", "FINALIZE", "STATUS")
+        auth = OauthSession(self.consumer_key, self.consumer_key_secret)
+        auth.set_access_token(self.access_token, self.access_token_secret)
+        auth = auth.oauth1
 
-        Parameters:
-        -----------
-        user_id: Union[str, int]
-            Represent the user id that you wish to get info to, If you dont have it you may use `fetch_user_byusername` because it only required the user's username.
+        def CheckStatus(processing_info, media_id):
+            if not processing_info:
+                return
 
-        http_client:
-            Represent the HTTP Client that make the request, this will be use for interaction between the client and the user. If this isn't a class or a subclass of HTTPClient, the current HTTPClient instance will be a default one.
+            state = processing_info["state"]
+            try:
+                seconds = processing_info["check_after_secs"]
+            except KeyError:
+                return
 
-        Raises:
-        -------
-        pytweet.errors.NotFoundError:
-            Raise when the api can't find a user with that id.
+            if state == "succeeded":
+                return
 
-        ValueError:
-            Raise when user_id is not an int and is not a string of digits.
+            if state == "failed":
+                raise PytweetException("Failed to finalize Media!")
 
-        This function return a :class:`User` object.
+            time.sleep(seconds)
+            params = {"command": "STATUS", "media_id": media_id}
 
-        .. versionadded:: 1.0.0
-        """
+            res = requests.get(url=self.upload_url, params=params, auth=auth)
+            check_error(res)
+
+            processing_info = res.json().get("processing_info", None)
+            CheckStatus(processing_info, media_id)
+
+        if command.upper() == "INIT":
+            data = {
+                "command": "INIT",
+                "media_type": file.mimetype,
+                "total_bytes": file.total_bytes,
+                "media_category": file.media_category,
+                "shared": file.dm_only,
+            }
+            res = requests.post(self.upload_url, data=data, auth=auth)
+            check_error(res)
+            return res.json()["media_id"]
+
+        elif command.upper() == "APPEND":
+            segment_id = 0
+            bytes_sent = 0
+            open_file = open(file.path, "rb")
+            if not media_id:
+                raise ValueError("'media_id' is None! Please specified it.")
+
+            while bytes_sent < file.total_bytes:
+                res = requests.post(
+                    url=self.upload_url,
+                    data={
+                        "command": "APPEND",
+                        "media_id": media_id,
+                        "segment_index": segment_id,
+                    },
+                    files={"media": open_file.read(4 * 1024 * 1024)},
+                    auth=auth,
+                )
+
+                bytes_sent = open_file.tell()
+                segment_id += 1
+
+        elif command.upper() == "FINALIZE":
+            res = requests.post(
+                url=self.upload_url,
+                data={"command": "FINALIZE", "media_id": media_id},
+                auth=auth,
+            )
+            check_error(res)
+            CheckStatus(res.json().get("processing_info", None), media_id)
+
+    def fetch_user(self, user_id: Union[str, int]) -> Optional[User]:
         try:
             int(user_id)
         except ValueError:
             raise ValueError("user_id must be an int, or a string of digits!")
 
-        data = self.request(
-            "GET",
-            "2",
-            f"/users/{user_id}",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params={
-                "user.fields": "created_at,description,entities,id,location,name,profile_image_url,protected,public_metrics,url,username,verified,withheld,pinned_tweet_id"
-            },
-            is_json=True,
-        )
+        try:
 
-        followers = self.request(
-            "GET",
-            "2",
-            f"/users/{user_id}/followers",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params={
-                "user.fields": "created_at,description,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld"
-            },
-        )
+            data = self.request(
+                "GET",
+                "2",
+                f"/users/{user_id}",
+                headers={"Authorization": f"Bearer {self.bearer_token}"},
+                params={"user.fields": USER_FIELD},
+                is_json=True,
+            )
 
-        following = self.request(
-            "GET",
-            "2",
-            f"/users/{user_id}/following",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params={
-                "user.fields": "created_at,description,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld"
-            },
-        )
+            return User(data, http_client=self)
 
-        data["data"].update(
-            {
-                "followers": [User(follower, http_client=http_client) for follower in followers["data"]]
-                if followers != []
-                else []
-            }
-        )
-        data["data"].update(
-            {
-                "following": [User(following, http_client=http_client) for following in following["data"]]
-                if following != []
-                else []
-            }
-        )
+        except NotFoundError:
+            return None
 
-        return User(data, http_client=http_client)
-
-    def fetch_user_byusername(self, username: str, *, http_client: Optional[HTTPClient] = None) -> User:
-        """Make a Request to obtain the user from their username.
-
-        Parameters:
-        -----------
-        username: str
-            Represent the user's username. A Username usually start with '@' before any letters. If a username named @Jack, then the username argument must be 'Jack'.
-
-        http_client:
-            Represent the HTTP Client that make the request, this will be use for interaction between the client and the user. If this isn't a class or a subclass of HTTPClient, the current HTTPClient instance will be a default one.
-
-        Raises:
-        -------
-            pytweet.errors.NotFoundError:
-                Raise when the api can't find a user with that username.
-
-        This function return a :class:`User` object.
-
-        .. versionadded:: 1.0.0
-        """
-
+    def fetch_user_byname(self, username: str) -> Optional[User]:
         if "@" in username:
             username = username.replace("@", "", 1)
 
-        data = self.request(
-            "GET",
-            "2",
-            f"/users/by/username/{username}",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params={
-                "user.fields": "created_at,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld"
-            },
-            is_json=True,
-        )
+        try:
 
-        user_payload = self.fetch_user(int(data["data"].get("id")), http_client=http_client)
-        data["data"].update({"followers": user_payload.followers})
-        data["data"].update({"following": user_payload.following})
+            data = self.request(
+                "GET",
+                "2",
+                f"/users/by/username/{username}",
+                headers={"Authorization": f"Bearer {self.bearer_token}"},
+                params={"user.fields": USER_FIELD},
+                is_json=True,
+            )
 
-        return User(data, http_client=http_client)
+            return User(data, http_client=self)
 
-    def fetch_tweet(self, tweet_id: Union[str, int], *, http_client: Optional[HTTPClient] = None) -> Tweet:
-        """Fetch a tweet info from the specified id. Return if consumer_key or consumer_key_secret or access_token or access_token_secret is not specified.
-
-        Parameters:
-        -----------
-        tweet_id: Union[str, int]
-            Represent the tweet's id that you wish .
-
-        http_client
-            Represent the HTTP Client that make the request, this will be use for interaction between the client and the user. If this isn't a class or a subclass of HTTPClient, the current HTTPClient instance will be a default one.
-
-        Raises:
-        -------
-            pytweet.errors.NotFoundError:
-                Raise when the api can't find a tweet with that id.
-
-        This function return a :class:`Tweet`.
-
-        .. versionadded:: 1.0.0
-        """
-        if not any([v for v in self.credentials.values()]):
+        except NotFoundError:
             return None
 
+    def fetch_tweet(self, tweet_id: Union[str, int]) -> Tweet:
+        try:
+
+            res = self.request(
+                "GET",
+                "2",
+                f"/tweets/{tweet_id}",
+                params={
+                    "tweet.fields": TWEET_FIELD,
+                    "user.fields": USER_FIELD,
+                    "expansions": TWEET_EXPANSION,
+                    "media.fields": MEDIA_FIELD,
+                    "place.fields": PLACE_FIELD,
+                    "poll.fields": POLL_FIELD,
+                },
+                auth=True,
+            )
+
+            return Tweet(res, http_client=self)
+
+        except NotFoundError:
+            return None
+
+    def fetch_space(self, space_id: str) -> Space:
         res = self.request(
             "GET",
             "2",
-            f"/tweets/{tweet_id}",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params={
-                "tweet.fields": "attachments,author_id,context_annotations,conversation_id,created_at,geo,entities,in_reply_to_user_id,lang,possibly_sensitive,public_metrics,referenced_tweets,reply_settings,source,text,withheld",
-                "user.fields": "created_at,description,id,location,name,profile_image_url,protected,public_metrics,url,username,verified,withheld",
-                "expansions": "attachments.poll_ids,attachments.media_keys,author_id,geo.place_id,in_reply_to_user_id,referenced_tweets.id,entities.mentions.username,referenced_tweets.id.author_id",
-                "media.fields": "duration_ms,height,media_key,preview_image_url,public_metrics,type,url,width",
-                "place.fields": "contained_within,country,country_code,full_name,geo,id,name,place_type",
-                "poll.fields": "duration_minutes,end_datetime,id,options,voting_status",
-            },
-            auth=True,
+            f"/spaces/{str(space_id)}",
+            params={"space.fields": SPACE_FIELD},
         )
+        return Space(res)
 
-        res2 = self.request(
+    def fetch_space_bytitle(self, title: str, state: SpaceState = SpaceState.live) -> Space:
+        res = self.request(
             "GET",
             "2",
-            f"/tweets/{tweet_id}/retweeted_by",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
+            "/spaces/search",
             params={
-                "user.fields": "created_at,description,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld"
+                "query": title,
+                "state": state.value,
+                "space.fields": SPACE_FIELD,
             },
         )
-
-        res3 = self.request(
-            "GET",
-            "2",
-            f"/tweets/{tweet_id}/liking_users",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params={
-                "user.fields": "created_at,description,id,location,name,pinned_tweet_id,profile_image_url,protected,public_metrics,url,username,verified,withheld"
-            },
-        )
-
-        user_id = res["includes"]["users"][0].get("id")
-        user = self.fetch_user(int(user_id), http_client=http_client)
-
-        res["includes"]["users"][0].update({"followers": user.followers})
-        res["includes"]["users"][0].update({"following": user.following})
-
-        try:
-            res2["data"]
-
-            res["data"].update(
-                {"retweetes": [User(user, http_client=http_client if http_client else self) for user in res2["data"]]}
-            )
-        except (KeyError, TypeError):
-            res["data"].update({"retweetes": []})
-
-        try:
-            res3["data"]
-
-            res["data"].update(
-                {"likes": [User(user, http_client=http_client if http_client else self) for user in res3["data"]]}
-            )
-        except (KeyError, TypeError):
-            res["data"].update({"likes": []})
-
-        return Tweet(res, http_client=http_client if http_client else None)
+        return Space(res)
 
     def send_message(
         self,
         user_id: Union[str, int],
         text: str,
         *,
-        quick_reply: QuickReply = None,
-        http_client=None,
+        file: Optional[File] = None,
+        custom_profile: Optional[CustomProfile] = None,
+        quick_reply: Optional[QuickReply] = None,
+        cta: Optional[CTA] = None,
     ) -> Optional[NoReturn]:
-        """Make a post Request for sending a message to a User.
-
-        Parameters:
-        -----------
-        user_id: Union[str, int]
-            The user id that you wish to send message to.
-
-        text: str
-            The text that will be send to that user.
-
-        quick_reply: QuickReply
-            The message's quick reply attachment.
-
-        http_client
-            Represent the HTTP Client that make the request, this will be use for interaction between the client and the user. If this isn't a class or a subclass of HTTPClient, the current HTTPClient instance will be a default one.
-
-        This function return a :class: `DirrectMessage` object.
-
-        .. versionadded:: 1.1.0
-
-        .. versionchanged:: 1.2.0
-
-        Make the method functional and return :class:`DirectMessage`
-        """
         data = {
             "event": {
                 "type": "message_create",
@@ -452,22 +387,42 @@ class HTTPClient:
             }
         }
 
-        if not isinstance(quick_reply, QuickReply):
-            if not quick_reply:
-                pass
-            else:
-                raise PytweetException("'quick_reply' is not an instance of pytweet.QuickReply")
+        if file and (not isinstance(file, File)):
+            raise PytweetException("'file' argument must be an instance of pytweet.File")
+
+        if custom_profile and (not isinstance(custom_profile, CustomProfile)):
+            raise PytweetException("'custom_profile' argument must be an instance of pytweet.CustomProfile")
+
+        if quick_reply and (not isinstance(quick_reply, QuickReply)):
+            raise PytweetException("'quick_reply' must be an instance of pytweet.QuickReply")
+
+        if cta and (not isinstance(cta, CTA)):
+            raise PytweetException("'cta' argument must be an instance of pytweet.CTA")
 
         message_data = data["event"]["message_create"]["message_data"]
+        message_data["text"] = str(text)
 
-        if text or not text:
-            message_data["text"] = str(text)
+        if file:
+            media_id = self.upload(file, "INIT")
+            self.upload(file, "APPEND", media_id=media_id)
+            self.upload(file, "FINALIZE", media_id=media_id)
+
+            message_data["attachment"] = {}
+            message_data["attachment"]["type"] = "media"
+            message_data["attachment"]["media"] = {}
+            message_data["attachment"]["media"]["id"] = str(media_id)
+
+        if custom_profile:
+            message_data["custom_profile_id"] = str(custom_profile.id)
 
         if quick_reply:
             message_data["quick_reply"] = {
                 "type": quick_reply.type,
-                "options": quick_reply.options,
+                "options": quick_reply.raw_options,
             }
+
+        if cta:
+            message_data["ctas"] = cta.raw_buttons
 
         res = self.request(
             "POST",
@@ -476,53 +431,17 @@ class HTTPClient:
             json=data,
             auth=True,
         )
-        msg = DirectMessage(res, http_client=http_client if http_client else self)
-        self.message_cache[msg.id] = msg
 
+        message_create = res.get("event").get("message_create")
+        user_id = message_create.get("target").get("recipient_id")
+        user = self.fetch_user(user_id)
+        res["event"]["message_create"]["target"]["recipient"] = user
+
+        msg = DirectMessage(res, http_client=self or self)
+        self.message_cache[msg.id] = msg
         return msg
 
-    def delete_message(self, event_id: Union[str, int]) -> None:
-        """Make a DELETE Request for deleting a certain DirectMessage.
-
-        Parameters
-        -----------
-        id:
-            The id of the Direct Message event that you want to delete.
-
-        .. versionadded:: 1.1.0
-
-        .. versionchanged:: 1.2.0
-
-        Make the method functional and return :class:`Tweet`
-        """
-        self.request(
-            "DELETE",
-            "1.1",
-            f"/direct_messages/events/destroy.json?id={event_id}",
-            auth=True,
-        )
-
-        try:
-            self.http_client.message_cache.pop(int(event_id))
-        except KeyError:
-            pass
-
-        return None
-
-    def fetch_message(self, event_id: Union[str, int], **kwargs: Any) -> Optional[DirectMessage]:
-        """Optional[:class:`DirectMessage`]: Fetch a direct message with the event id.
-
-        .. warning::
-            This method uses api call and might cause ratelimit if used often!
-
-        Parameters
-        ------------
-        event_id: Union[:class:`str`, :class:`int`]
-            The event id of the Direct Message event that you want to fetch.
-
-        .. versionadded:: 1.2.0
-        """
-        http_client: HTTPClient = kwargs.get("http_client", None)
+    def fetch_message(self, event_id: Union[str, int]) -> Optional[DirectMessage]:
         try:
             event_id = str(event_id)
         except ValueError:
@@ -530,128 +449,77 @@ class HTTPClient:
 
         res = self.request("GET", "1.1", f"/direct_messages/events/show.json?id={event_id}", auth=True)
 
-        return DirectMessage(res, http_client=http_client if http_client else self)
+        message_create = res.get("event").get("message_create")
+        user_id = message_create.get("target").get("recipient_id")
+        user = self.fetch_user(user_id)
+        res["event"]["message_create"]["target"]["recipient"] = user
 
-    def post_tweet(self, text: str, *, http_client=None, **kwargs: Any) -> Union[NoReturn, Any]:
-        """
-        .. note::
-            This function is almost complete! though you can still use and open an issue in github if it cause an error.
+        return DirectMessage(res, http_client=self)
 
-        Make a POST Request to post a tweet through with the given arguments.
-
-        .. versionadded:: 1.1.0
-
-        .. versionchanged:: 1.2.0
-
-        Make the method functional and return :class:`Tweet`
-        """
-
+    def post_tweet(
+        self,
+        text: str = None,
+        *,
+        file: Optional[File] = None,
+        poll: Optional[Poll] = None,
+        geo: Optional[Union[Geo, str]] = None,
+        quote_tweet: Optional[Union[str, int]] = None,
+        direct_message_deep_link: Optional[str] = None,
+        reply_setting: Optional[str] = None,
+        reply_tweet: Optional[Union[str, int]] = None,
+        exclude_reply_users: Optional[List[Union[str, int]]] = None,
+        super_followers_only: Optional[bool] = None,
+    ) -> Optional[Message]:
         payload = {}
         if text:
             payload["text"] = text
 
+        if file:
+            media_id = self.upload(file, "INIT")
+            self.upload(file, "APPEND", media_id=media_id)
+            self.upload(file, "FINALIZE", media_id=media_id)
+
+            payload["media"] = {}
+            payload["media"]["media_ids"] = [str(media_id)]
+
+        if poll:
+            payload["poll"] = {}
+            payload["poll"]["options"] = [option.label for option in poll.options]
+            payload["poll"]["duration_minutes"] = int(poll.duration)
+
+        if geo:
+            if not isinstance(geo, Geo) and not isinstance(geo, str):
+                raise TypeError("'geo' must be an instance of pytweet.Geo or str")
+
+            payload["geo"] = {}
+            payload["geo"]["place_id"] = geo.id if isinstance(geo, Geo) else geo
+
+        if quote_tweet:
+            payload["quote_tweet_id"] = str(quote_tweet)
+
+        if direct_message_deep_link:
+            payload["direct_message_deep_link"] = direct_message_deep_link
+
+        if reply_setting:
+            payload["reply_settings"] = (
+                reply_setting.value if isinstance(reply_setting, ReplySetting) else reply_setting
+            )
+
+        if reply_tweet or exclude_reply_users:
+            if reply_tweet:
+                payload["reply"] = {}
+                payload["reply"]["in_reply_to_tweet_id"] = str(reply_tweet)
+
+            if exclude_reply_users:
+                if "reply" in payload.keys():
+                    payload["reply"]["exclude_reply_user_ids"] = [str(id) for id in exclude_reply_users]
+                else:
+                    payload["reply"] = {}
+                    payload["reply"]["exclude_reply_user_ids"] = [str(id) for id in exclude_reply_users]
+
+        if super_followers_only:
+            payload["for_super_followers_only"] = True
+
         res = self.request("POST", "2", "/tweets", json=payload, auth=True)
-
-        tweet = Tweet(res, http_client=http_client if http_client else self)
-        self.tweet_cache[tweet.id] = tweet
-
-        return tweet
-
-    def delete_tweet(self, tweet_id: Union[str, int]) -> None:
-        """
-        .. note::
-            This function is almost complete! though you can still use and open an issue in github if it cause an error.
-
-        Make a DELETE Request to delete a tweet through the tweet_id.
-
-        .. versionadded:: 1.2.0
-        """
-
-        self.request("DELETE", "2", f"/tweets/{tweet_id}", auth=True)
-
-        try:
-            self.tweet_cache.pop(tweet_id)
-        except KeyError:
-            pass
-
-        return None
-
-    def follow_user(self, user_id: Union[str, int]) -> RelationFollow:
-        """Make a POST Request to follow a User.
-
-        Parameters:
-        -----------
-
-        user_id: Union[str, int]
-            The user's id that you wish to follow.
-
-        This function return a :class: `RelationFollow` object.
-
-        .. versionadded:: 1.1.0
-
-        .. versionchanged:: 1.2.0
-
-        Make the method functional and return :class:`RelationFollow`
-        """
-        my_id = self.access_token.partition("-")[0]
-        res = self.request(
-            "POST",
-            "2",
-            f"/users/{my_id}/following",
-            json={"target_user_id": str(user_id)},
-            auth=True,
-        )
-        return RelationFollow(res)
-
-    def unfollow_user(self, user_id: Union[str, int]) -> RelationFollow:
-        """Make a DELETE Request to unfollow a User.
-
-        Parameters:
-        -----------
-        user_id: Union[str, int]
-            The user's id that you wish to unfollow.
-
-        This function return a :class:`RelationFollow` object.
-
-        .. versionadded:: 1.1.0
-
-        .. versionchanged:: 1.2.0
-
-        Make the method functional and return :class:`RelationFollow`
-        """
-        my_id = self.access_token.partition("-")[0]
-        res = self.request("DELETE", "2", f"/users/{my_id}/following/{user_id}", auth=True)
-        return RelationFollow(res)
-
-    def block_user(self, user_id: Union[str, int]) -> None:
-        """Make a POST Request to Block a User.
-
-        Parameters:
-        -----------
-        user_id: Union[str, int]
-            The user's id that you wish to block.
-
-        .. versionadded:: 1.2.0
-        """
-        my_id = self.access_token.partition("-")[0]
-        self.request(
-            "POST",
-            "2",
-            f"/users/{my_id}/blocking",
-            json={"target_user_id": str(user_id)},
-            auth=True,
-        )
-
-    def unblock_user(self, user_id: Union[str, int]) -> None:
-        """Make a DELETE Request to unblock a User.
-
-        Parameters:
-        -----------
-        user_id: Union[str, int]
-            The user's id that you wish to unblock.
-
-
-        .. versionadded:: 1.2.0
-        """
-        my_id = self.access_token.partition("-")[0]
-        self.request("DELETE", "2", f"/users/{my_id}/blocking/{user_id}", auth=True)
+        data = res.get("data")
+        return Message(data.get("text"), data.get("id"), 1)

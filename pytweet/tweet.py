@@ -1,24 +1,22 @@
-import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Optional, TypeVar, Union
+from __future__ import annotations
 
-from .attachments import Media, Poll
-from .enums import MessageTypeEnum
+import datetime
+from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Optional, Union
+
+from .attachments import Poll
+from .message import Message
 from .metrics import TweetPublicMetrics
+from .relations import RelationHide, RelationLike, RelationRetweet
 from .user import User
 from .utils import time_parse_todt
-from .message import Message
-from .relations import RelationLike, RelationRetweet
+from .entities import Media
+from .enums import ReplySetting
+from .expansions import USER_FIELD
 
 if TYPE_CHECKING:
     from .http import HTTPClient
 
-TT = TypeVar("TT", bound="Tweet")
-
-__all__ = (
-    "EmbedsImages",
-    "Embed",
-    "Tweet",
-)
+__all__ = ("EmbedsImages", "Embed", "Tweet")
 
 
 class EmbedsImages:
@@ -165,31 +163,35 @@ class Tweet(Message):
     A Tweet is any message posted to Twitter which may contain photos, videos, links, and text.
 
     .. describe:: x == y
+
         Check if one tweet id is equal to another.
 
 
     .. describe:: x != y
+
         Check if one tweet id is not equal to another.
 
 
     .. describe:: str(x)
+
         Get the Tweet's text.
 
 
     .. versionadded:: 1.0.0
-
-    .. versionchanged:: 1.2.0
-
-    Inherite :class:`Message`. The text and ID property is now provided by :class:`Message`,
     """
+
+    if TYPE_CHECKING:
+        _payload: Dict[Any, Any]
+        original_payload: Dict[str, Any]
+        _includes: Any
 
     def __init__(self, data: Dict[str, Any], **kwargs: Any) -> None:
         self.original_payload = data
-        self._payload = data.get("data") or None
+        self._payload = data.get("data") or data
         self._includes = self.original_payload.get("includes")
         self.tweet_metrics: TweetPublicMetrics = TweetPublicMetrics(self._payload)
 
-        super().__init__(self._payload.get("text"), self._payload.get("id"))
+        super().__init__(self._payload.get("text"), self._payload.get("id"), 1)
         self.http_client: Optional[HTTPClient] = kwargs.get("http_client") or None
 
     def __repr__(self) -> str:
@@ -198,22 +200,24 @@ class Tweet(Message):
     def __str__(self) -> str:
         return self.text
 
-    def __eq__(self, other: TT) -> Union[bool, NoReturn]:
-        if not isinstance(other, self):
+    def __eq__(self, other: Tweet) -> Union[bool, NoReturn]:
+        if not isinstance(other, Tweet):
             raise ValueError("== operation cannot be done with one of the element not a valid Tweet object")
         return self.id == other.id
 
-    def __ne__(self, other: TT) -> Union[bool, NoReturn]:
-        if not isinstance(other, self):
+    def __ne__(self, other: Tweet) -> Union[bool, NoReturn]:
+        if not isinstance(other, Tweet):
             raise ValueError("!= operation cannot be done with one of the element not a valid User object")
         return self.id != other.id
 
     def like(self) -> Optional[RelationLike]:
-        """:class:`RelationLike`: Method for liking a tweet.
+        """Like the tweet.
 
         Returns
         ---------
-        Returns a :class:`RelationLike` object.
+        Optional[:class:`RelationLike`]
+            This method returns a :class:`RelationLike` object.
+
 
         .. versionadded:: 1.2.0
         """
@@ -225,12 +229,12 @@ class Tweet(Message):
         return RelationLike(res)
 
     def unlike(self) -> Optional[RelationLike]:
-        """:class:`RelationLike`: Method for unliking a tweet.
+        """Unlike the tweet.
 
         Returns
         ---------
         :class:`RelationLike`
-            Returns a :class:`RelationLike` object.
+            This method returns a :class:`RelationLike` object.
 
 
         .. versionadded:: 1.2.0
@@ -242,30 +246,37 @@ class Tweet(Message):
         return RelationLike(res)
 
     def retweet(self) -> RelationRetweet:
-        """:class:`RelationRetweet`: Method for retweet a tweet.
+        """Retweet the tweet.
 
         Returns
         ---------
         :class:`RelationRetweet`
-            Returns a :class:`RelationRetweet` object.
+            This method returns a :class:`RelationRetweet` object.
 
 
         .. versionadded:: 1.2.0
         """
-        my_id = self.http_client.access_token.partition("-")[0]
-
-        payload = {"tweet_id": str(self.id)}
-        res = self.http_client.request("POST", "2", f"/users/{my_id}/retweets", json=payload, auth=True)
+        my_id: Union[int, str] = self.http_client.access_token.partition("-")[0]
+        res: dict = self.http_client.request(
+            "POST",
+            "2",
+            f"/users/{my_id}/retweets",
+            json={"tweet_id": str(self.id)},
+            auth=True,
+        )
 
         return RelationRetweet(res)
 
     def unretweet(self) -> RelationRetweet:
-        """:class:`RelationRetweet`: Method for unretweet a tweet.
+        """Unretweet the tweet.
 
         Returns
         ---------
         :class:`RelationRetweet`
-            Returns a :class:`RelationRetweet` object.
+            This method returns a :class:`RelationRetweet` object.
+
+
+        .. versionadded:: 1.2.0
         """
         my_id = self.http_client.access_token.partition("-")[0]
 
@@ -274,37 +285,146 @@ class Tweet(Message):
         return RelationRetweet(res)
 
     def delete(self) -> None:
-        """:class:`None`: A method for HTTPClient.delete_message()
+        """Delete the client's tweet.
+
+        .. note::
+            You can only delete the client's tweet.
 
         .. versionadded:: 1.2.0
         """
 
-        self.http_client.delete_tweet(int(self.id))
-        return None
+        self.http_client.request("DELETE", "2", f"/tweets/{self.id}", auth=True)
+
+        try:
+            self.http_client.tweet_cache.pop(self.id)
+        except KeyError:
+            pass
+
+    def reply(self, text: str) -> None:
+        """Post a tweet to reply a specific tweet present by the tweet's id.
+
+        .. note::
+            Note that if the tweet is a retweet you cannot reply to the tweet, it might not raise error but it will post the tweet has a normal tweet and it will ping the :class:`Tweet.author`.
+
+        Parameters
+        ------------
+        text: str
+            The reply tweet's main text.
+
+
+        .. versionadded:: 1.2.5
+        """
+        tweet = self.http_client.request(
+            "POST",
+            "1.1",
+            f"/statuses/update.json",
+            params={
+                "status": self.author.username + " " + text,
+                "in_reply_to_status_id": str(self.id),
+            },
+            auth=True,
+        )  # TODO Returns the tweet in Tweet object
+
+    def hide(self) -> RelationHide:
+        """Hide a reply tweet.
+
+        Returns
+        ---------
+        :class:`RelationHide`
+            This method returns a :class:`RelationHide` object.
+
+
+        .. versionadded:: 1.2.5
+        """
+        res: dict = self.http_client.request("PUT", "2", f"/tweets/{self.id}/hidden", json={"hidden": False}, auth=True)
+        return RelationHide(res)
+
+    def unhide(self) -> RelationHide:
+        """Unhide a hide reply.
+
+        Returns
+        ---------
+        :class:`RelationHide`
+            This method returns a :class:`RelationHide` object.
+
+
+        .. versionadded:: 1.2.5
+        """
+        res: dict = self.http_client.request("PUT", "2", f"/tweets/{self.id}/hidden", json={"hidden": False}, auth=True)
+        return RelationHide(res)
+
+    def fetch_retweeters(self):
+        """Return users that retweeted the tweet.
+
+        Returns
+        ---------
+        Optional[List[:class:`User`], List]
+            This method returns a list of :class:`User` objects
+
+        .. versionadded:: 1.1.3
+        """
+        res = self.http_client.request(
+            "GET",
+            "2",
+            f"/tweets/{self.id}/retweeted_by",
+            params={"user.fields": USER_FIELD},
+        )
+
+        try:
+            return [User(user, http_client=self) for user in res["data"]]
+        except (KeyError, TypeError):
+            return []
+
+    def fetch_liking_users(self) -> Optional[List[User], List]:
+        """Return users that liked the tweet.
+
+        Returns
+        ---------
+        Optional[List[:class:`User`], List]
+            This method returns a list of :class:`User` objects
+
+        .. versionadded:: 1.1.3
+        """
+        res = self.http_client.request(
+            "GET",
+            "2",
+            f"/tweets/{self.id}/liking_users",
+            params={"user.fields": USER_FIELD},
+        )
+
+        try:
+            return [User(user, http_client=self) for user in res["data"]]
+        except (KeyError, TypeError):
+            return []
+
+    def fetch_replied_user(self) -> Optional[User]:
+        """Return the user that you reply with the tweet, a tweet count as reply tweet if the tweet startswith @Username or mention a user.
+
+        Returns
+        ---------
+        Optional[:class:`User`]
+            This method returns a :class:`User` object or :class:`NoneType`
+
+        .. versionadded:: 1.1.3
+        """
+        return (
+            self.http_client.fetch_user(
+                int(self._payload.get("in_reply_to_user_id")),
+                http_client=self.http_client,
+            )
+            if self._payload.get("in_reply_to_user_id")
+            else None
+        )
 
     @property
-    def author(self) -> User:
+    def author(self) -> Optional[User]:
         """Optional[:class:`User`]: Return a user (object) who posted the tweet.
 
         .. versionadded: 1.0.0
         """
-        return User(self._includes.get("users")[0], http_client=self.http_client)
-
-    @property
-    def retweetes(self) -> Union[List[User], list]:
-        """Optional[List[:class:`User`, :class:`list`], :class:`int`]: Return a list of users that's retweeted the tweet's id. Maximum users is 100. Return empty list if no one retweeted.
-
-        .. versionadded: 1.0.0
-        """
-        return self._payload.get("retweetes")
-
-    @property
-    def likes(self) -> Union[List[User], list]:
-        """Optional[List[:class:`User`], :class:`list`]: Return a list of users that liked the tweet's id. Maximum users is 100. Return empty list if no one liked.
-
-        .. versionadded: 1.0.0
-        """
-        return self._payload.get("likes")
+        if self._includes and self._includes.get("users"):
+            return User(self._includes.get("users")[0], http_client=self.http_client)
+        return None
 
     @property
     def sensitive(self) -> bool:
@@ -331,12 +451,20 @@ class Tweet(Message):
         return self._payload.get("source")
 
     @property
-    def reply_setting(self) -> str:
-        """:class:`str`: Return the reply setting. If everyone can replied, reply_setting return 'Everyone'.
+    def raw_reply_setting(self) -> str:
+        """:class:`str`: Return the raw reply setting value. If everyone can replied, this method return 'Everyone'.
 
         .. versionadded: 1.0.0
         """
         return self._payload.get("reply_settings")
+
+    @property
+    def reply_setting(self) -> ReplySetting:
+        """:class:`ReplySetting`: Return a :class:`ReplySetting` object with the tweet's reply setting. If everyone can reply, this method return ReplySetting.everyone.
+
+        .. versionadded: 1.3.5
+        """
+        return ReplySetting(self._payload.get("reply_settings"))
 
     @property
     def lang(self) -> str:
@@ -363,33 +491,13 @@ class Tweet(Message):
         return f"https://twitter.com/{self.author.username.split('@', 1)[1]}/status/{self.id}"
 
     @property
-    def reply_to(self) -> Optional[User]:
-        """Optional[:class:`User`]: Return the user that you reply with the tweet, a tweet count as reply tweet if the tweet startswith @Username or mention a user.
+    def mentions(self) -> Optional[List[str]]:
+        """Optional[List[:class:`str`]]: Return the mentioned user's username.
 
         .. versionadded:: 1.1.3
         """
-        user = (
-            self.http_client.fetch_user(
-                int(self._payload.get("in_reply_to_user_id")),
-                http_client=self.http_client,
-            )
-            if self._payload.get("in_reply_to_user_id")
-            else None
-        )
-        return user
-
-    @property
-    def mentions(self) -> Optional[List[User]]:
-        """Optional[List[:class:`User`]]: Return the mentioned users, if there isn't it return None.
-
-        .. versionadded:: 1.1.3
-        """
-        if self._includes:
-            if self._includes.get("mentions"):
-                return [
-                    self.http_client.fetch_user_byusername(user.get("username"), http_client=self.http_client)
-                    for user in self._includes.get("mentions")
-                ]
+        if self._includes and self._includes.get("mentions"):
+            return [user for user in self._includes.get("mentions")]
         return None
 
     @property
@@ -400,19 +508,26 @@ class Tweet(Message):
         """
         if self._includes:
             if self._includes.get("polls"):
-                return Poll(self._includes.get("polls")[0])
-
+                data = self._includes.get("polls")[0]
+                poll = Poll(
+                    data.get("duration_minutes"),
+                    id=data.get("id"),
+                    voting_status=data.get("voting_status"),
+                    end_date=data.get("end_datetime"),
+                )
+                for option in data.get("options"):
+                    poll.add_option(**option)
+                return poll
         return None
 
     @property
-    def medias(self) -> Optional[Media]:
+    def media(self) -> Optional[Media]:
         """List[:class:`Media`]: Return a list of media(s) in a tweet.
 
         .. versionadded:: 1.1.0
         """
-        if self._includes:
-            if self._includes.get("media"):
-                return [Media(img) for img in self._includes.get("media")]
+        if self._includes and self._includes.get("media"):
+            return [Media(img) for img in self._includes.get("media")]
         return None
 
     @property
@@ -421,18 +536,9 @@ class Tweet(Message):
 
         .. versionadded:: 1.1.3
         """
-        if self._payload.get("entities"):
-            if self._payload.get("entities").get("urls"):
-                return [Embed(url) for url in self._payload.get("entities").get("urls")]
+        if self._payload.get("entities") and self._payload.get("entities").get("urls"):
+            return [Embed(url) for url in self._payload.get("entities").get("urls")]
         return None
-
-    @property
-    def type(self) -> MessageTypeEnum:
-        """:class:`MessageTypeEnum`: Return the Message type.
-
-        .. versionadded:: 1.2.0
-        """
-        return MessageTypeEnum(1)
 
     @property
     def like_count(self) -> int:
@@ -465,3 +571,5 @@ class Tweet(Message):
         .. versionadded: 1.1.0
         """
         return self.tweet_metrics.quote_count
+
+    possible_sensitive = sensitive

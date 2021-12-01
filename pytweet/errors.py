@@ -1,5 +1,6 @@
-import requests
 from typing import Optional
+
+import requests
 
 
 class PytweetException(Exception):
@@ -33,7 +34,7 @@ class APIException(PytweetException):
 
 
 class HTTPException(PytweetException):
-    """:class:`PytweetException`: A custom error that will be raised when ever a request return HTTP status code above 200.
+    """:class:`PytweetException`: A custom error that will be raise when ever a request return HTTP status code above 200.
 
     .. versionadded:: 1.2.0
     """
@@ -78,7 +79,20 @@ class Unauthorized(HTTPException):
     .. versionadded:: 1.0.0
     """
 
-    pass
+    def __init__(self, response, message: str = None):
+        msg = None
+        detail = None
+        if response.json().get("errors"):
+            msg = response.json().get("errors")[0].get("message") if not message else message
+            detail = response.json().get("errors")[0].get("detail")
+
+        else:
+            detail = response.json().get("detail")
+
+        super().__init__(
+            response,
+            msg if msg else detail if detail else "Unauthorize to do that action!",
+        )
 
 
 class Forbidden(HTTPException):
@@ -101,7 +115,10 @@ class Forbidden(HTTPException):
         else:
             detail = response.json().get("detail")
 
-        super().__init__(response, msg if msg else detail if detail else "Forbidden to do that action.")
+        super().__init__(
+            response,
+            msg if msg else detail if detail != "Forbidden" else "Forbidden to do that action.",
+        )
 
 
 class NotFound(HTTPException):
@@ -130,7 +147,7 @@ class TooManyRequests(HTTPException):
 
 
 class NotFoundError(APIException):
-    """This error is usually returns when trying to find specific Tweet, User that does not exist.
+    """:class:`APIException`: This error is usually returns when trying to find specific Tweet, User that does not exist.
 
     .. versionadded:: 1.0.0
     """
@@ -143,3 +160,26 @@ class NotFoundError(APIException):
         msg = response.json().get("errors")[0].get("message") if not message else message
         detail = response.json().get("errors")[0].get("detail")
         super().__init__(response, msg if msg else detail if detail else "Not Found!")
+
+
+class UnKnownSpaceState(APIException):
+    def __init__(self, given_state):
+        super().__init__(message="Unknown state passed: %s" % given_state)
+
+
+class ConnectionException(HTTPException):
+    def __init__(
+        self,
+        response: Optional[requests.models.Response] = None,
+        message: Optional[str] = None,
+    ):
+        json = response.json()
+        if "errors" in json and not message:
+            msg = response.json().get("errors")[0].get("message") if not message else message
+            detail = response.json().get("errors")[0].get("detail")
+
+        else:
+            msg = None
+            detail = json.get("detail")
+
+        super().__init__(response, msg if msg else detail)
