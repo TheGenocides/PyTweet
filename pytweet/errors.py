@@ -1,10 +1,10 @@
-from typing import Optional
-
 import requests
+from typing import Optional
+from json import decoder
 
 
 class PytweetException(Exception):
-    """Exception: This is the base class of all exceptions.
+    """This is the base class of all exceptions raise by PyTweet. This inherits :class:`Exception`.
 
     .. versionadded:: 1.2.0
     """
@@ -18,7 +18,7 @@ class PytweetException(Exception):
 
 
 class APIException(PytweetException):
-    """:class:`PytweetException`: Raise When an error is incurred during a request with HTTP Status code 200.
+    """raises when an error is incurred during a request with HTTP Status code 200. This inherits :class:`PytweetException`.
 
     .. versionadded:: 1.2.0
     """
@@ -30,11 +30,11 @@ class APIException(PytweetException):
     ):
         self.res = response
         self.message = message
-        super().__init__(f"API Return an Exception: {self.message}")
+        super().__init__(f"API returned an Exception: {self.message}")
 
 
 class HTTPException(PytweetException):
-    """:class:`PytweetException`: A custom error that will be raise when ever a request return HTTP status code above 200.
+    """A custom error that will be raises whenever a request returns an HTTP status code above 200. This inherits :class:`PytweetException`.
 
     .. versionadded:: 1.2.0
     """
@@ -44,101 +44,81 @@ class HTTPException(PytweetException):
         response: Optional[requests.models.Response] = None,
         message: str = None,
     ):
-        self.res = response
-        self.json = response.json() if response else None
+        self.response = response
         self.message = message
-        super().__init__(f"Request Return an Exception (status code: {self.res.status_code}): {self.message}")
+        self.detail = None
+        try:
+            res = self.response.json()
+            if res.get("errors"):
+                self.message = res.get("errors")[0].get("message") if not message else message
+                self.detail = res.get("errors")[0].get("detail")
+
+            else:
+                self.message = res.get("error")
+                if not self.message:
+                    self.detail = res.get("detail")
+
+        except decoder.JSONDecodeError:
+            super().__init__(
+                f"Request returned an Exception (status code: {self.response.status_code}): {self.response.text}",
+            )
+
+        else:
+            super().__init__(
+                f"Request returned an Exception (status code: {self.response.status_code}): {self.message if self.message else self.detail}",
+            )
 
     @property
     def status_code(self) -> Optional[int]:
-        if not self.res:
+        if not self.response:
             return None
-
-        return self.res.status_code
+        return self.response.status_code
 
 
 class BadRequests(HTTPException):
-    """:class:`HTTPException`: Raised when a request return status code: 400.
+    """This class inherits :class:`HTTPException`. raises when a request return status code: 400.
 
     .. versionadded:: 1.2.0
     """
 
-    def __init__(
-        self,
-        response: Optional[requests.models.Response] = None,
-        message: Optional[str] = None,
-    ):
-        msg = response.json().get("errors")[0].get("message") if not message else message
-        detail = response.json().get("errors")[0].get("detail")
-        super().__init__(response, msg if msg else detail if detail else "Not Found!")
+    pass
 
 
 class Unauthorized(HTTPException):
-    """:class:`HTTPException`: Raised when the Credentials you passed is invalid and a request return status code: 401
+    """This class inherits :class:`HTTPException`. raises when the credentials you passed are invalid and a request returns status code: 401
 
     .. versionadded:: 1.0.0
     """
 
-    def __init__(self, response, message: str = None):
-        msg = None
-        detail = None
-        if response.json().get("errors"):
-            msg = response.json().get("errors")[0].get("message") if not message else message
-            detail = response.json().get("errors")[0].get("detail")
-
-        else:
-            detail = response.json().get("detail")
-
-        super().__init__(
-            response,
-            msg if msg else detail if detail else "Unauthorize to do that action!",
-        )
+    pass
 
 
 class Forbidden(HTTPException):
-    """:class:`HTTPException`: Raised when a request return status code: 403.
+    """This class inherits :class:`HTTPException`. Raises when a request returns status code: 403.
 
     .. versionadded:: 1.2.0
     """
 
-    def __init__(
-        self,
-        response: Optional[requests.models.Response] = None,
-        message: Optional[str] = None,
-    ):
-        msg = None
-        detail = None
-        if response.json().get("errors"):
-            msg = response.json().get("errors")[0].get("message") if not message else message
-            detail = response.json().get("errors")[0].get("detail")
+    pass
 
-        else:
-            detail = response.json().get("detail")
 
-        super().__init__(
-            response,
-            msg if msg else detail if detail != "Forbidden" else "Forbidden to do that action.",
-        )
+class FieldsTooLarge(HTTPException):
+    """ "This class inherits :class:`HTTPException`. Raises when a request returns status code: 431"""
+
+    pass
 
 
 class NotFound(HTTPException):
-    """:class:`HTTPException`: Raised when a request return status code: 404.
+    """This class inherits :class:`HTTPException`. raises when a request returns status code: 404.
 
     .. versionadded:: 1.2.0
     """
 
-    def __init__(
-        self,
-        response: Optional[requests.models.Response] = None,
-        message: Optional[str] = None,
-    ):
-        msg = response.json().get("errors")[0].get("message") if not message else message
-        detail = response.json().get("errors")[0].get("detail")
-        super().__init__(response, msg if msg else detail if detail else "Not Found!")
+    pass
 
 
 class TooManyRequests(HTTPException):
-    """:class:`HTTPException`: Raised when ratelimit exceeded and a request return status code: 429
+    """This class inherits :class:`HTTPException`. raises when ratelimit exceeded and a request return status code: 429
 
     .. versionadded:: 1.1.0
     """
@@ -146,8 +126,23 @@ class TooManyRequests(HTTPException):
     pass
 
 
+class ConnectionException(HTTPException):
+    """This error class inherits :class:`HTTPException`. This error is raises when a stream connection throw an error.
+
+    .. versionadded:: 1.3.5
+    """
+
+    pass
+
+
+class Conflict(HTTPException):
+    """This error class inherits :class:`HTTPException`. This error is raises when a request return 409 status code."""
+
+    pass
+
+
 class NotFoundError(APIException):
-    """:class:`APIException`: This error is usually returns when trying to find specific Tweet, User that does not exist.
+    """This error class inherits :class:`APIException`. This error is usually raises when trying to find specific Tweet or User that does not exist.
 
     .. versionadded:: 1.0.0
     """
@@ -163,23 +158,20 @@ class NotFoundError(APIException):
 
 
 class UnKnownSpaceState(APIException):
+    """This error class inherits :class:`APIException`. This error is raises when a user specified an invalid space state.
+
+    .. versionadded:: 1.5.0
+    """
+
     def __init__(self, given_state):
         super().__init__(message="Unknown state passed: %s" % given_state)
 
 
-class ConnectionException(HTTPException):
-    def __init__(
-        self,
-        response: Optional[requests.models.Response] = None,
-        message: Optional[str] = None,
-    ):
-        json = response.json()
-        if "errors" in json and not message:
-            msg = response.json().get("errors")[0].get("message") if not message else message
-            detail = response.json().get("errors")[0].get("detail")
+class NoPageAvailable(APIException):
+    """This error class inherits :class:`APIException`. This error is raises when a user try to lookup a new page in :class:`PaginationIterator` that does not exist.
 
-        else:
-            msg = None
-            detail = json.get("detail")
+    .. versionadded:: 1.5.0
+    """
 
-        super().__init__(response, msg if msg else detail)
+    def __init__(self):
+        super().__init__(message="Pagination have no more page avalaible!")

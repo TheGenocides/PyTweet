@@ -16,6 +16,15 @@ requirements = []
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
+extras_require = {
+    "docs": [
+        "sphinx>=4.0.2",
+        "furo==2021.11.23",
+        "sphinx_copybutton>=0.4.0",
+    ],
+    "events": ["Flask>=2.0.2"],
+}
+
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.7",
@@ -28,13 +37,17 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
 ]
 
+# fmt: off
+
+# fmt: on
+
 setup(
     name="PyTweet",
     author="TheGenocide & TheFarGG",
     maintainer=", ".join(("TheFarGG", "TheGenocide")),
     url="https://github.com/PyTweet/PyTweet/",
     version=version,
-    packages=["pytweet"],
+    packages=["pytweet", "pytweet.dataclass"],
     include_package_data=True,
     license="MIT",
     project_urls={
@@ -45,7 +58,7 @@ setup(
     long_description=readme,
     long_description_content_type="text/markdown",
     install_requires=requirements,
-    extras_require={"docs": ["sphinx>=4.0.2"]},
+    extras_require=extras_require,
     keywords="PyTweet, pytweet, twitter, tweet.py twitter.py",
     python_requires=">=3.7.0",
     classifiers=classifiers,

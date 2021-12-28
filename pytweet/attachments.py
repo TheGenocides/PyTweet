@@ -1,74 +1,50 @@
 from __future__ import annotations
 
-import datetime
 import mimetypes
+import datetime
+import io
 import os
-from dataclasses import dataclass
-from typing import Any, Dict, List, NoReturn, Optional, Union
+import json
+from typing import Any, Dict, List, NoReturn, Optional, Union, TYPE_CHECKING
 
+from .dataclass import PollOption, Option, Button
+from .entities import Media
 from .enums import ButtonType
 from .utils import time_parse_todt
-from .entities import Media
+from .errors import PytweetException
+from . import __path__
 
-__all__ = ("PollOption", "Poll", "QuickReply", "Geo", "CTA", "Button", "Option", "File")
+if TYPE_CHECKING:
+    from .type import ID
 
+__all__ = ("Poll", "QuickReply", "Geo", "CTA", "File")
 
-@dataclass
-class Button:
-    """Represent a Button object. Button are attachment that you can attach via :class:`CTA`
-
-    .. versionadded:: 1.3.5
-    """
-
-    label: str
-    type: Union[ButtonType, str]
-    url: str
-    tco_url: Optional[str] = None
-
-
-@dataclass
-class Option:
-    """Represent an Option object. You can create an Option using :class:`QuickReply.add_option`
-
-    .. versionadded:: 1.3.5
-    """
-
-    label: str
-    description: str
-    metadata: str
-
-
-@dataclass
-class PollOption:
-    """Represent an Option for :class:`Poll`
-
-    .. versionadded 1.3.5
-    """
-
-    label: str
-    position: int = 0
-    votes: int = 0
+with open(f"{__path__[0]}/language.json", "r") as f:
+    data = json.load(f)
 
 
 class Poll:
-    """Represent a Poll attachment in a tweet.
+    """Represents a Poll attachment in a tweet.
 
     .. describe:: x == y
+
         Check if one Poll's id is equal to another.
 
 
     .. describe:: x != y
+
         Check if one Poll's id is not equal to another.
 
 
     .. describe:: len(x)
-        returns how many options in the poll.
+
+        returns how many options the poll have.
 
     Parameters
     ------------
     duration: :class:`int`
         The poll duration in minutes.
-    id: Optional[Union[:class:`str`, :class:`int`]]
+    id: Optional[`ID`]
         The poll's unique ID.
     voting_status: Optional[:class:`str`]
         The poll's voting status.
@@ -79,8 +55,10 @@ class Poll:
     .. versionadded:: 1.1.0
     """
 
+    __slots__ = ("_id", "_voting_status", "_end_date", "_duration", "_options", "_raw_options")
+
     def __init__(self, duration: int, **kwargs):
-        self._id: Optional[Union[str, int]] = kwargs.get("id", None)
+        self._id: Optional[ID] = kwargs.get("id", None)
         self._voting_status: Optional[str] = kwargs.get("voting_status", None)
         self._end_date = kwargs.get("end_date", None)
         self._duration = duration
@@ -160,12 +138,32 @@ class Poll:
         return self._raw_options
 
     @property
-    def voting_status(self) -> bool:
-        """:class:`bool`: Return True if the poll is still open for voting, if its closed it return False.
+    def voting_status(self) -> str:
+        """:class:`str`: Returns the current voting status of the poll.
 
         .. versionadded:: 1.1.0
+
+        .. versionchanged:: 1.3.7
         """
-        return self._voting_status == "open"
+        return self._voting_status
+
+    @property
+    def is_open(self) -> bool:
+        """:class:`bool`: Return True if the poll is still open for voting, if it's closed it will returns False.
+
+        .. versionadded:: 1.3.7
+        """
+
+        return self.voting_status == "open"
+
+    @property
+    def is_closed(self) -> bool:
+        """:class:`bool`: Returns False if the poll is still open for voting, if it's closed it returns True.
+
+        .. versionadded:: 1.3.7
+        """
+
+        return not self.is_open
 
     @property
     def duration(self) -> int:
@@ -185,7 +183,7 @@ class Poll:
 
 
 class QuickReply:
-    """Represent a quick_reply attachment in Direct Message.
+    """Represents a quick_reply attachment in Direct Message.
 
     Parameters
     ------------
@@ -199,6 +197,8 @@ class QuickReply:
 
     .. versionadded:: 1.2.0
     """
+
+    __slots__ = ("type", "_options", "_raw_options")
 
     def __init__(self, type: str = "options"):
         self.type = type if type == "options" else "options"
@@ -242,8 +242,8 @@ class QuickReply:
         return self._options
 
     @property
-    def raw_options(self) -> List[Dict]:
-        """List[Dict]: Returns the raw options.
+    def raw_options(self) -> List[dict]:
+        """List[:class:`dict`]: Returns the raw options.
 
         .. versionadded:: 1.2.0
         """
@@ -251,7 +251,7 @@ class QuickReply:
 
 
 class Geo:
-    """Represent the Geo location in twitter.
+    """Represents the Geo location in twitter.
     You can use this as attachment in a tweet or for searching a location
 
     Parameters
@@ -263,21 +263,20 @@ class Geo:
     .. versionadded:: 1.3.5
     """
 
+    __slots__ = ("_payload", "__bounding_box")
+
     def __init__(self, data: Dict[str, Any]):
         self._payload = data
-        self._bounding_box = self._payload.get("bounding_box")
+        self.__bounding_box = self._payload.get("bounding_box")
 
     def __repr__(self) -> str:
         return "Geo(name={0.name} fullname={0.fullname} country={0.country} country_code={0.country_code} id={0.id})".format(
             self
         )
 
-    def __str__(self) -> str:
-        return self.name
-
     @property
     def name(self) -> str:
-        """:class:`str`: Returns place's name.
+        """:class:`str`: Returns the geo's name.
 
         .. versionadded:: 1.3.5
         """
@@ -285,7 +284,7 @@ class Geo:
 
     @property
     def id(self) -> str:
-        """:class:`str`: Returns place's unique id.
+        """:class:`str`: Returns the geo's unique id.
 
         .. versionadded:: 1.3.5
         """
@@ -293,7 +292,7 @@ class Geo:
 
     @property
     def fullname(self) -> str:
-        """:class:`str`: Returns place's fullname.
+        """:class:`str`: Returns the geo's fullname.
 
         .. versionadded:: 1.3.5
         """
@@ -301,7 +300,7 @@ class Geo:
 
     @property
     def type(self) -> str:
-        """:class:`str`: Returns place's type.
+        """:class:`str`: Returns the geo's type.
 
         .. versionadded:: 1.3.5
         """
@@ -309,7 +308,7 @@ class Geo:
 
     @property
     def country(self) -> str:
-        """:class:`str`: Returns the country where the place is in.
+        """:class:`str`: Returns the country where the geo is in.
 
         .. versionadded:: 1.3.5
         """
@@ -317,7 +316,7 @@ class Geo:
 
     @property
     def country_code(self) -> str:
-        """:class:`str`: Returns the country's code where the location is in.
+        """:class:`str`: Returns the country's code where the geo is in.
 
         .. versionadded:: 1.3.5
         """
@@ -325,7 +324,7 @@ class Geo:
 
     @property
     def centroid(self) -> str:
-        """:class:`str`: Returns the place's centroid.
+        """:class:`str`: Returns the geo's centroid.
 
         .. versionadded:: 1.3.5
         """
@@ -333,31 +332,33 @@ class Geo:
 
     @property
     def bounding_box_type(self) -> str:
-        """:class:`str`: Returns the place's bounding box type.
+        """:class:`str`: Returns the geo's bounding box type.
 
         .. versionadded:: 1.3.5
         """
-        if self._bounding_box:
-            return self._bounding_box.get("type")
+        if self.__bounding_box:
+            return self.__bounding_box.get("type")
         return None
 
     @property
     def coordinates(self) -> List[str]:
-        """List[:class:`str`]: Returns a list of coordinates where the place's located.
+        """List[:class:`str`]: Returns a list of coordinates where the geo's located.
 
         .. versionadded:: 1.3.5
         """
-        if self._bounding_box:
-            return self._bounding_box.get("coordinates")
+        if self.__bounding_box:
+            return self.__bounding_box.get("coordinates")
         return None
 
 
 class CTA:
-    """Represent call-to-action attachment(CTA)
-    You can use this in a post_tweet method via direct_message_deep_link kwarg or use it in direct message via CTA kwarg. CTA will perform and action whenever a user "call" something, an example of this is buttons.
+    """Represents call-to-action attachment(CTA)
+    You can use it in :meth:`User.send` via CTA kwarg. CTA will perform and action whenever a user "call" something, an example of this is buttons.
 
     .. versionadded:: 1.3.5
     """
+
+    __slots__ = ("_buttons", "_raw_buttons")
 
     def __init__(self):
         self._buttons = []
@@ -416,21 +417,60 @@ class CTA:
 
 
 class File:
-    """Represent a File attachment for messages.
+    """Represents a File attachment for messages.
 
     Parameters
     ------------
-    path_to_filename: :class:`str`
+    path: :class:`str`
         The file's path.
     dm_only: :class:`bool`
         Indicates if the file is use in dm only. Default to False.
+    alt_text: Optional[:class:`str`]
+        The image's alt text, if None specified the image wont have an alt text. Default to None.
+    subtitle_language_code: :class:`str`
+        The language code should be a BCP47 code (e.g. "en").
+    subfile: :class:`File`
+        The subtitle's source file. Must be a .srt file with the correct timestamps and contents.
+
+    .. versionadded:: 1.3.5
     """
 
-    def __init__(self, path_to_filename: str, *, dm_only: bool = False):
-        self.__path = path_to_filename
-        self._total_bytes = os.path.getsize(self.path)
-        self._mimetype = mimetypes.MimeTypes().guess_type(self.path)[0]
+    __slots__ = (
+        "__path",
+        "_total_bytes",
+        "_mimetype",
+        "dm_only",
+        "alt_text",
+        "subtitle_language_code",
+        "subfile",
+        "subtitle_language",
+        "__media_id",
+    )
+
+    def __init__(
+        self,
+        path: str,
+        *,
+        dm_only: bool = False,
+        alt_text: Optional[str] = None,
+        subtitle_language_code: Optional[str] = None,
+        subfile: Optional[File] = None,
+    ):
+        mimetype_guesser = mimetypes.MimeTypes().guess_type
+        self.__path = path
+        self._total_bytes = os.path.getsize(path) if isinstance(path, str) else os.path.getsize(path.name)
+        self._mimetype = mimetype_guesser(path) if isinstance(path, str) else mimetype_guesser(path.name)
         self.dm_only = dm_only
+        self.alt_text = alt_text
+        self.__media_id = None
+        self.subtitle_language_code = subtitle_language_code
+        self.subfile = subfile
+        if self.subtitle_language_code:
+            fullname = data.get(subtitle_language_code)
+            if fullname:
+                self.subtitle_language = fullname
+            else:
+                raise PytweetException("Wrong language codes passed! Must be a BCP47 code (e.g. 'en')")
 
     def __repr__(self) -> str:
         return "File(filename={0.filename})".format(self)
@@ -444,12 +484,28 @@ class File:
         return self.__path
 
     @property
+    def media_id(self) -> Optional[int]:
+        """Optional[:class:`int`]: Returns the file's media id. Returns None if the file was never uploaded.
+
+        .. versionadded:: 1.5.0
+        """
+        return int(self.__media_id) if self.__media_id else self.__media_id
+
+    @property
+    def subfile_media_id(self) -> Optional[int]:
+        """Optional[:class:`int`]: Returns the file's subtitle file's media id. Returns None if the subfile was never uploaded.
+
+        .. versionadded:: 1.5.0
+        """
+        return int(self.subfile.media_id) if self.subfile.media_id else self.subfile.media_id
+
+    @property
     def mimetype(self) -> str:
         """:class:`str`: Returns the file's mimetype.
 
         .. versionadded:: 1.3.5
         """
-        return self._mimetype
+        return self._mimetype[0]
 
     @property
     def filename(self) -> str:
@@ -457,7 +513,8 @@ class File:
 
         .. versionadded:: 1.3.5
         """
-        return os.path.basename(self.path)
+        path = self.__path
+        return path.name if isinstance(path, io.IOBase) else os.path.basename(path)
 
     @property
     def total_bytes(self) -> int:
@@ -483,16 +540,18 @@ class File:
 
 
 class CustomProfile:
-    """Represent a CustomProfile attachments that allow a Direct Message author to present a different identity than that of the Twitter account being used.
+    """Represents a CustomProfile attachments that allow a Direct Message author to present a different identity than that of the Twitter account being used.
 
     .. versionadded:: 1.3.5
     """
 
+    __slots__ = ("_name", "_id", "_timestamp", "_media")
+
     def __init__(
         self,
         name: str,
-        id: Union[str, int],
-        timestamp: Union[str, int],
+        id: ID,
+        timestamp: ID,
         media: Dict[str, Any],
     ):
         self._name = name
@@ -525,8 +584,7 @@ class CustomProfile:
 
         .. versionadded:: 1.3.5
         """
-        timestamp = str(self._timestamp)[:10]
-        return datetime.datetime.fromtimestamp(int(timestamp))
+        return datetime.datetime.fromtimestamp(int(self._timestamp) / 1000)
 
     @property
     def media(self) -> Media:

@@ -6,15 +6,29 @@
 
 <img alt="PyPI - License" src="https://img.shields.io/pypi/l/PyTweet">
 
+
 <img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/PyTweet">
+
 
 <img src="https://img.shields.io/github/commit-activity/m/PyTweet/PyTweet?color=turquoise&logo=github&logoColor=black">
 
+
 <img src="https://img.shields.io/github/issues-pr/PyTweet/PyTweet?color=yellow&label=Pull%20Requests&logo=github&logoColor=black">
+
 
 <img src="https://img.shields.io/discord/858312394236624957?color=blue&label=PyTweet&logo=discord">
 
+
 <img src='https://readthedocs.org/projects/py-tweet/badge/?version=latest' alt='Documentation Status' />
+
+
+<img src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftwbadges.glitch.me%2Fbadges%2Fstandard">
+
+
+<img src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftwbadges.glitch.me%2Fbadges%2Fpremium">
+
+
+<img src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftwbadges.glitch.me%2Fbadges%2Fv2">
 
 </div>
 <br>
@@ -37,30 +51,18 @@ python3 -m pip install PyTweet
 
 ## Usage
 
-#### First we create our client instance using pytweet.Client()
-
 ```py
 import pytweet
 
 client = pytweet.Client(
     "Your Bearer Token Here!!!", 
     consumer_key="Your consumer_key here", 
-    consumer_key_secret="Your consumer_key_secret here", 
+    consumer_secret="Your consumer_secret here", 
     access_token="Your access_token here", 
     access_token_secret="Your access_token_secret here",
 ) #if you dont have one make an application in https://apps.twitter.com
-```
 
-#### After that we use functions to get info from twitter api
-
-```py
-user = client.get_user_by_name("TheGenocides")
-print(user.name, user.username, user.id)
-# Return The user's name, username, and id
-
-tweet = client.get_tweet(Tweet ID Here)
-print(tweet.text, tweet.id, tweet.author.username)
-# Return the tweet's text, id, and the author's username.
+client.tweet("Hello world, Hello twitter!")
 ```
 
 You can check in `examples` directory for more example code.

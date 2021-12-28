@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from .attachments import QuickReply, CTA, File
-from .entities import Hashtags, Symbols, Urls, UserMentions
+from .app import ApplicationInfo
+from .attachments import CTA, File, QuickReply
+from .entities import Hashtag, Symbol, Url, UserMention
 from .enums import MessageEventTypeEnum, MessageTypeEnum
 from .user import User
 
 if TYPE_CHECKING:
     from .http import HTTPClient
+    from .type import ID
 
 __all__ = ("Message", "DirectMessage", "WelcomeMessage", "WelcomeMessageRule")
 
@@ -21,21 +23,23 @@ class Message:
     ------------
     text: Optional[:class:`str`]
         The messages's text.
-    id: Union[:class:`str`, :class:`int`]
+    id: `ID`
         The messages's unique ID.
     type: :class:`int`.
-        The message's type in int form, it will get form to MessageTypeEnum.
+        The message's type in int form, it will gets form to MessageTypeEnum.
 
 
     .. versionadded:: 1.2.0
     """
 
+    __slots__ = ("_text", "_id", "_type")
+
     if TYPE_CHECKING:
         _text: Optional[str]
-        _id: Union[str, int]
+        _id: ID
         _type: int
 
-    def __init__(self, text: Optional[str], id: Union[str, int], type: int):
+    def __init__(self, text: Optional[str], id: ID, type: int):
         self._text = text
         self._id = id
         self._type = type
@@ -43,22 +47,19 @@ class Message:
     def __repr__(self) -> str:
         return "Message(text={0.text} id={0.id})".format(self)
 
-    def __str__(self) -> str:
-        return self.text
-
     @property
     def text(self) -> str:
         """:class:`str`: Returns the message's text.
 
-        .. versionadded:: 1.3.5
+        .. versionadded:: 1.2.0
         """
         return self._text
 
     @property
     def id(self) -> int:
-        """:class:`int`: Returns the message's id.
+        """:class:`int`: Returns the message's id, or if its a direct message it returns an event id.
 
-        .. versionadded:: 1.3.5
+        .. versionadded:: 1.2.0
         """
         return int(self._id)
 
@@ -66,7 +67,7 @@ class Message:
     def type(self) -> MessageTypeEnum:
         """:class:`MessageTypeEnum`: Returns the message's type.
 
-        .. versionadded:: 1.3.5
+        .. versionadded:: 1.2.0
         """
         return MessageTypeEnum(self._type)
 
@@ -77,27 +78,33 @@ class DirectMessage(Message):
     .. versionadded:: 1.2.0
     """
 
-    def __init__(self, data: Dict[str, Any], *, http_client: HTTPClient):
-        self.original_payload = data
-        self._payload = data.get("event", None)
-        self.message_create = self._payload.get("message_create", None)
-        self.message_data = self.message_create.get("message_data", None)
-        self.entities = self.message_data.get("entities", None)
-        self.quick_reply_data = self.message_data.get("quick_reply")
-        self.cta_data = self.message_data.get("ctas")
+    __slots__ = (
+        "__original_payload",
+        "_payload",
+        "__message_create",
+        "__message_data",
+        "__entities",
+        "_quick_reply_data",
+        "_cta_data",
+        "http_client",
+    )
 
-        super().__init__(self.message_data.get("text"), self._payload.get("id"), 0)
+    def __init__(self, data: Dict[str, Any], *, http_client: HTTPClient):
+        self.__original_payload = data
+        self._payload = data.get("event", None)
+        self.__message_create = self._payload.get("message_create", None)
+        self.__message_data = self.__message_create.get("message_data", None)
+        self.__entities = self.__message_data.get("entities", None)
+        self._quick_reply_data = self.__message_data.get("quick_reply")
+        self._cta_data = self.__message_data.get("ctas")
         self.http_client = http_client
-        self.timestamp = round(datetime.datetime.utcnow().timestamp())
+        super().__init__(self.__message_data.get("text"), self._payload.get("id"), 0)
 
     def __repr__(self) -> str:
         return "DirectMessage(text={0.text} id={0.id} recipient={0.recipient})".format(self)
 
-    def __str__(self) -> str:
-        return self.text
-
     def delete(self) -> None:
-        """Make a Request to delete the DirectMessage.
+        """Delete the direct message.
 
         .. versionadded:: 1.1.0
         """
@@ -139,11 +146,27 @@ class DirectMessage(Message):
 
     @property
     def recipient(self) -> User:
-        """:class:`User`: Returns the recipient that received the message.
+        """:class:`User`: Returns the user that received the direct message.
 
         .. versionadded:: 1.2.0
         """
-        return self.message_create.get("target").get("recipient")
+        return self.__message_create.get("target", {}).get("recipient")
+
+    @property
+    def author(self) -> Optional[User]:
+        """:class:`User`: Returns the user that sent the direct message.
+
+        .. versionadded:: 1.5.0
+        """
+        return self.__message_create.get("target", {}).get("sender", None)
+
+    @property
+    def application_info(self) -> Optional[ApplicationInfo]:
+        """:class:`ApplicationInfo`: Returns the direct messages's source application info if there is, else it return None.
+
+        .. versionadded:: 1.5.0
+        """
+        return self.__message_create.get("target", {}).get("application_info", None)
 
     @property
     def created_at(self) -> datetime.datetime:
@@ -151,39 +174,39 @@ class DirectMessage(Message):
 
         .. versionadded:: 1.2.0
         """
-        return datetime.datetime.fromtimestamp(self.timestamp)
+        return datetime.datetime.fromtimestamp(int(self._payload.get("created_timestamp")) / 1000)
 
     @property
-    def hashtags(self) -> Optional[List[Hashtags]]:
-        """List[:class:`Hashtags`]: Returns the messages's hashtags.
+    def hashtags(self) -> Optional[List[Hashtag]]:
+        """List[:class:`Hashtag`]: Returns the messages's hashtags.
 
         .. versionadded:: 1.2.0
         """
-        return [Hashtags(data) for data in self.entities.get("hashtags")]
+        return [Hashtag(data) for data in self.__entities.get("hashtag")]
 
     @property
-    def symbols(self) -> Optional[List[Symbols]]:
-        """List[:class:`Symbols`]: Returns the messages's hashtags.
+    def symbols(self) -> Optional[List[Symbol]]:
+        """List[:class:`Symbol`]: Returns the messages's symbols.
 
         .. versionadded:: 1.2.0
         """
-        return [Symbols(data) for data in self.entities.get("symbols")]
+        return [Symbol(data) for data in self.__entities.get("symbols")]
 
     @property
-    def mentions(self) -> Optional[List[UserMentions]]:
-        """List[:class:`UserMentions`]: Returns the messages usermentions.
+    def mentions(self) -> Optional[List[UserMention]]:
+        """List[:class:`UserMention`]: Returns the messages mentioned users.
 
         .. versionadded:: 1.2.0
         """
-        return [UserMentions(data) for data in self.entities.get("user_mentions")]
+        return [UserMention(data) for data in self.__entities.get("user_mentions")]
 
     @property
-    def urls(self) -> Optional[List[Urls]]:
-        """List[:class:`Urls`]: Returns the message's urls.
+    def urls(self) -> Optional[List[Url]]:
+        """List[:class:`Url`]: Returns the message's urls.
 
         .. versionadded:: 1.2.0
         """
-        return [Urls(data) for data in self.entities.get("urls")]
+        return [Url(data) for data in self.__entities.get("urls")]
 
     @property
     def quick_reply(self) -> Optional[QuickReply]:
@@ -191,29 +214,37 @@ class DirectMessage(Message):
 
         .. versionadded:: 1.3.5
         """
-        if self.quick_reply_data and self.quick_reply_data.get("options"):
-            attachment = QuickReply(self.quick_reply_data.get("type"))
-            for option in self.quick_reply_data.get("options"):
+        if self._quick_reply_data and self._quick_reply_data.get("options"):
+            attachment = QuickReply(self._quick_reply_data.get("type"))
+            for option in self._quick_reply_data.get("options"):
                 attachment.add_option(**option)
             return attachment
         return None
 
     @property
+    def quick_reply_response(self) -> Optional[str]:
+        """Optional[:class:`str`]: Returns the metadata of the quick reply option that the author clicked.
+
+        .. versionadded:: 1.5.0
+        """
+        return self.__message_data.get("quick_reply_response", {}).get("metadata", None)
+
+    @property
     def cta(self) -> Optional[CTA]:
-        """Optional[:class:`CTA`]: Returns the message's cta.
+        """Optional[:class:`CTA`]: Returns the message's cta attachment.
 
         .. versionadded:: 1.3.5
         """
-        if self.cta_data:
+        if self._cta_data:
             attachment = CTA()
-            for button in self.cta_data:
+            for button in self._cta_data:
                 attachment.add_button(**button)
             return attachment
         return None
 
 
 class WelcomeMessage(Message):
-    """Represent a Welcome Message in a Direct Message.
+    """Represents a Welcome Message in a Direct Message.
 
     Parameters
     ------------
@@ -221,7 +252,7 @@ class WelcomeMessage(Message):
         A human readable name for the Welcome Message.
     text: :class:`str`
         The welcome message main text.
-    id: Union[:class:`str`, :class:`int`]
+    id: `ID`
         The welcome message unique id.
     timestamp: Optional[:class:`str`]
         The welcome message timestamp.
@@ -232,12 +263,14 @@ class WelcomeMessage(Message):
     .. versionadded:: 1.3.5
     """
 
+    __slots__ = ("_name", "_timestamp", "http_client")
+
     def __init__(
         self,
         name: Optional[str] = None,
         *,
         text: str,
-        id: Union[str, int],
+        id: ID,
         timestamp: str,
         http_client: HTTPClient,
     ):
@@ -249,9 +282,6 @@ class WelcomeMessage(Message):
     def __repr__(self) -> str:
         return "WelcomeMessage(text={0.text} id={0.id})".format(self)
 
-    def __str__(self) -> str:
-        return self.text
-
     def set_rule(self) -> WelcomeMessageRule:
         """Set a new Welcome Message Rule that determines which Welcome Message will be shown in a given conversation. Returns the created rule if successful.
 
@@ -262,9 +292,9 @@ class WelcomeMessage(Message):
         except Exception as e:
             raise e
 
-        data: Dict[str, Union[int, Dict[str, int]]] = {"welcome_message_rule": {"welcome_message_id": str(self.id)}}
+        data = {"welcome_message_rule": {"welcome_message_id": str(self.id)}}
 
-        res: dict = self.http_client.request(
+        res = self.http_client.request(
             "POST",
             "1.1",
             "/direct_messages/welcome_messages/rules/new.json",
@@ -272,13 +302,13 @@ class WelcomeMessage(Message):
             auth=True,
         )
 
-        args: list = [v for k, v in res.get("welcome_message_rule").items()]
+        args = [v for k, v in res.get("welcome_message_rule").items()]
         return WelcomeMessageRule(args[0], args[2], args[1], http_client=self.http_client)
 
     def update(
         self,
-        text: str = None,
         *,
+        text: Optional[str] = None,
         file: Optional[File] = None,
         quick_reply: Optional[QuickReply] = None,
         cta: Optional[CTA] = None,
@@ -287,10 +317,10 @@ class WelcomeMessage(Message):
 
         Parameters
         -----------
-        text: :class:`str`
+        text: Optional[:class:`str`]
             The welcome message main text
         file: Optional[:class:`File`]:
-            Represent a single file attachment. It could be an image, gif, or video. It also have to be an instance of pytweet.File
+            Represents a single file attachment. It could be an image, gif, or video. It also have to be an instance of pytweet.File
         quick_reply: Optional[:class:`QuickReply`]
             The message's :class:`QuickReply` attachments.
         cta: Optional[:class:`CTA`]
@@ -304,47 +334,7 @@ class WelcomeMessage(Message):
 
         .. versionadded:: 1.3.5
         """
-        data = {"message_data": {}}
-        message_data = data["message_data"]
-
-        message_data["text"] = str(text)
-
-        if file:
-            media_id = self.http_client.upload(file, "INIT")
-            self.http_client.upload(file, "APPEND", media_id=media_id)
-            self.http_client.upload(file, "FINALIZE", media_id=media_id)
-            message_data["attachment"] = {}
-            message_data["attachment"]["type"] = "media"
-            message_data["attachment"]["media"] = {}
-            message_data["attachment"]["media"]["id"] = str(media_id)
-
-        if quick_reply:
-            message_data["quick_reply"] = {
-                "type": quick_reply.type,
-                "options": quick_reply.raw_options,
-            }
-
-        if cta:
-            message_data["ctas"] = cta.raw_buttons
-
-        res = self.http_client.request(
-            "PUT",
-            "1.1",
-            "/direct_messages/welcome_messages/update.json",
-            params={"id": str(self.id)},
-            json=message_data,
-            auth=True,
-        )
-
-        welcome_message = res.get("welcome_message")
-        message_data = welcome_message.get("message_data")
-
-        name = res.get("name")
-        id = welcome_message.get("id")
-        timestamp = welcome_message.get("created_timestamp")
-        text = message_data.get("text")
-
-        return WelcomeMessage(name, text=text, id=id, timestamp=timestamp)
+        return self.http_client.update_welcome_message(text=text, file=file, quick_reply=quick_reply, cta=cta)
 
     def delete(self):
         """Delete the Welcome Message.
@@ -365,8 +355,7 @@ class WelcomeMessage(Message):
 
         .. versionadded:: 1.3.5
         """
-        timestamp = str(self._timestamp)[:10]
-        return datetime.datetime.fromtimestamp(int(timestamp))
+        return datetime.datetime.fromtimestamp(int(self._timestamp) / 1000)
 
     @property
     def name(self) -> str:
@@ -378,13 +367,13 @@ class WelcomeMessage(Message):
 
 
 class WelcomeMessageRule(Message):
-    """Represent a Welcome Message Rule in a Direct Message. This object is returns by WelcomeMessage.set_rule or client.fetch_welcome_message_rules, it determines which Welcome Message will be shown in a given conversation.
+    """Represents a Welcome Message Rule in a Direct Message. This object is returns by WelcomeMessage.set_rule or client.fetch_welcome_message_rules, it determines which Welcome Message will be shown in a given conversation.
 
     Parameters
     ------------
-    id: Union[:class:`str`, :class:`int`]
+    id: `ID`
         The welcome message rule unique id.
-    welcome_message_id: Union[:class:`str`, :class:`int`]
+    welcome_message_id: `ID`
         The welcome message unique id.
     timestamp: Optional[:class:`str`]
         The welcome message rule created timestamp.
@@ -395,11 +384,13 @@ class WelcomeMessageRule(Message):
     .. versionadded:: 1.3.5
     """
 
+    __slots__ = ("_welcome_message_id", "_timestamp", "http_client")
+
     def __init__(
         self,
-        id: Union[str, int],
-        welcome_message_id: Union[str, int],
-        timestamp: Union[str, int],
+        id: ID,
+        welcome_message_id: ID,
+        timestamp: ID,
         *,
         http_client: HTTPClient,
     ):
@@ -428,18 +419,30 @@ class WelcomeMessageRule(Message):
             auth=True,
         )
 
+    def fetch_welcome_message(self) -> Optional[WelcomeMessage]:
+        """A method for fetching the welcome message rule's welcome message. An equivalent to :meth:`Client.fetch_welcome_message`.
+
+        Returns
+        ---------
+        Optional[:class:`WelcomeMessage`]
+            This method returns a :class:`WelcomeMessage` object.
+
+
+        .. versionadded:: 1.5.0
+        """
+        return self.http_client.fetch_welcome_message(self.welcome_message_id)
+
     @property
     def created_at(self) -> datetime.datetime:
         """:class:`datetime.datetime`: Returns a datetime.datetime object with the WelcomeMessageRule created time.
 
         .. versionadded:: 1.3.5
         """
-        timestamp = str(self._timestamp)[:10]
-        return datetime.datetime.fromtimestamp(int(timestamp))
+        return datetime.datetime.fromtimestamp(int(self._timestamp) / 1000)
 
     @property
-    def welcome_message_id(self) -> Union[str, int]:
-        """Union[:class:`str`, :class:`int`]: Returns the welcome message's id.
+    def welcome_message_id(self) -> ID:
+        """:clasD`: Returns the welcome message's id.
 
         .. versionadded:: 1.3.5
         """

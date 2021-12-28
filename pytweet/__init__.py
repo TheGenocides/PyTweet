@@ -10,16 +10,21 @@ PyTweet is a Synchronous python API wrapper for Twitter's API!
 import logging
 from typing import Literal, NamedTuple
 
+from .app import *
 from .attachments import *
 from .auth import *
 from .client import *
 from .entities import *
 from .enums import *
+from .environment import *
 from .errors import *
+from .events import *
 from .expansions import *
 from .http import *
 from .message import *
 from .metrics import *
+from .mixins import *
+from .parsers import *
 from .relations import *
 from .space import *
 from .stream import *
@@ -28,7 +33,7 @@ from .user import *
 from .utils import *
 
 __title__ = "PyTweet"
-__version__ = "1.3.5rc1"
+__version__ = "1.5.0a1"
 __author__ = "TheFarGG & TheGenocides"
 __license__ = "MIT"
 __copyright__ = "Copyright 2021 TheFarGG & TheGenocides"
@@ -42,8 +47,8 @@ class VersionInfo(NamedTuple):
     serial: int
 
 
-version_info: VersionInfo = VersionInfo(major=1, minor=3, micro=5, releaselevel="candidate", serial=1)
+version_info: VersionInfo = VersionInfo(major=1, minor=5, micro=0, releaselevel="alpha", serial=3)
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-assert version_info.releaselevel in ("alpha", "beta", "candidate", "final")
+assert version_info.releaselevel in ("alpha", "beta", "candidate", "final"), "Invalid release level given."

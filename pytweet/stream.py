@@ -1,21 +1,16 @@
 from __future__ import annotations
 
-import requests
 import json
+import requests
 import logging
 import time
-from typing import Optional, Type, Union, Any, List, TYPE_CHECKING
-from dataclasses import dataclass
+
+from typing import TYPE_CHECKING, Any, List, Type, Optional
+from .dataclass import StreamRule
+from .errors import ConnectionException, PytweetException
+from .expansions import MEDIA_FIELD, PLACE_FIELD, POLL_FIELD, TWEET_EXPANSION, TWEET_FIELD, USER_FIELD
 from .tweet import Tweet
-from .errors import PytweetException, ConnectionException
-from .expansions import (
-    TWEET_FIELD,
-    MEDIA_FIELD,
-    PLACE_FIELD,
-    POLL_FIELD,
-    USER_FIELD,
-    TWEET_EXPANSION,
-)
+
 
 if TYPE_CHECKING:
     from .http import HTTPClient
@@ -28,24 +23,14 @@ def _check_for_errors(data, session):
         raise ConnectionException(session, None)
 
 
-@dataclass
-class StreamRule:
-    """Represent a stream rule.
-
-    .. versionadded:: 1.3.5
-    """
-
-    value: str
-    tag: Optional[str] = None
-    id: Optional[Union[str, int]] = None
-
-
 class StreamConnection:
     """Represent the twitter api stream connection. This will handle the stream connection.
 
 
     .. versionadded:: 1.3.5
     """
+
+    __slots__ = ("url", "backfill_minutes", "reconnect_attempts", "http_client", "session", "errors", "running")
 
     def __init__(
         self,
@@ -60,29 +45,31 @@ class StreamConnection:
         self.http_client: Optional[HTTPClient] = http_client
         self.session: Optional[Any] = None
         self.errors = 0
+        self.running = False
 
     @property
     def closed(self) -> Optional[bool]:
-        """ "Optional[:class:`bool`]: Returns True if the connection is closed, else False.
+        """Optional[:class:`bool`]: Returns True if the connection is closed, else False.
 
         .. versionadded:: 1.3.5
         """
-        return self.session is None
+        return not self.running
 
     def is_close(self) -> Optional[bool]:
-        """ "An alias to :class:`StreamConnection.closed`.
+        """An alias to :class:`StreamConnection.closed`.
 
         Returns
         ---------
         Optional[:class:`bool`]:
             This method returns a :class:`bool` object.
 
+
         .. versionadded:: 1.3.5
         """
         return self.closed
 
     def close(self) -> None:
-        """ "Close the stream connection.
+        """Close the stream connection.
 
         Returns
         ---------
@@ -92,23 +79,24 @@ class StreamConnection:
 
         .. versionadded:: 1.3.5
         """
-        if self.is_close():
+        if not self.running:
             raise PytweetException("Attempt to close a stream that's already closed!")
 
-        _log.info("Closing connection!")
-        self.session.close()
-        self.session = None
+        self.running = False
 
     def connect(self) -> Optional[Any]:
-        """ "Connect to the current stream connection.
+        """Connect to the current stream connection.
+
 
         .. versionadded:: 1.3.5
         """
-        while True:
+        self.running = True
+        http = self.http_client
+        while self.running:
             try:
                 response = requests.get(
                     self.url,
-                    headers={"Authorization": f"Bearer {self.http_client.bearer_token}"},
+                    headers={"Authorization": f"Bearer {http.bearer_token}"},
                     params={
                         "backfill_minutes": int(self.backfill_minutes),
                         "expansions": TWEET_EXPANSION,
@@ -121,16 +109,16 @@ class StreamConnection:
                     stream=True,
                 )
                 _log.info("Client connected to stream!")
-                self.http_client.dispatch("stream_connect", self)
+                http.dispatch("stream_connect", self)
                 self.session = response
 
                 for response_line in response.iter_lines():
                     if response_line:
                         json_data = json.loads(response_line.decode("UTF-8"))
                         _check_for_errors(json_data, self.session)
-                        tweet = Tweet(json_data, http_client=self.http_client)
-                        self.http_client.tweet_cache[tweet.id] = tweet
-                        self.http_client.dispatch("stream", tweet, self)
+                        tweet = Tweet(json_data, http_client=http)
+                        http.tweet_cache[tweet.id] = tweet
+                        http.dispatch("stream", tweet, self)
 
             except Exception as e:
                 if isinstance(e, AttributeError):
@@ -141,7 +129,7 @@ class StreamConnection:
                     if self.errors > self.reconnect_attempts:
                         _log.error("Too many errors caught during streaming, closing stream!")
                         self.close()
-                        self.http_client.dispatch("stream_disconnect", self)
+                        http.dispatch("stream_disconnect", self)
                         break
 
                     _log.warning(f"An error caught during streaming session: {e}")
@@ -167,6 +155,8 @@ class Stream:
 
     .. versionadded:: 1.3.5
     """
+
+    __slots__ = ("backfill_minutes", "raw_rules", "http_client", "reconnect_attempts", "sample", "connection")
 
     def __init__(self, backfill_minutes: int = 0, reconnect_attempts: int = 15):
         self.backfill_minutes = backfill_minutes
@@ -223,7 +213,7 @@ class Stream:
         return [StreamRule(**data) for data in self.raw_rules]
 
     def add_rule(self, value: str, tag: Optional[str] = None) -> Optional[Stream]:
-        """Add a rule to your stream to match with tweets that the stream return. You can use an operator to do this, check https://developer.twitter.com/en/docs/twitter-api/tweets/search/integrate/build-a-query for more information about the operator.
+        """Add a rule to your stream to match with tweets that the stream return. You can use an operator to do this, check https://developer.twitter.com/en/docs/twitter-api/tweets/search/integrate/build-a-query for more information about the operator. You can add multiple rules depending your access level, 5 for essential access, 25 for elevated access and 100 for academic research access.
 
         Parameters
         ------------
@@ -276,7 +266,7 @@ class Stream:
             rules = self.http_client.request("POST", "2", "/tweets/search/stream/rules", json=data)
 
     def fetch_rules(self) -> Optional[List[StreamRule]]:
-        """Fetch the stream's rules.
+        """Fetches the stream's rules.
 
         Returns
         ---------
@@ -307,12 +297,6 @@ class Stream:
         ------------
         dry_run: :class:`bool`
             Indicates if you want to debug your rule's operator syntax.
-
-        Returns
-        ---------
-        :class:`NoneType`:
-            This method returns None.
-
 
         .. versionadded:: 1.3.5
         """
@@ -348,11 +332,6 @@ class Stream:
         ------------
         dry_run: :class:`bool`
             Indicates if you want to debug your rule's operator syntax. Default to None.
-
-        Returns
-        ---------
-        :class:`NoneType`:
-            This method returns None.
 
 
         .. versionadded:: 1.3.5
